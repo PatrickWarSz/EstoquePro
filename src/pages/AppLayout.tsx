@@ -1,13 +1,16 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, Link, useLocation } from "react-router-dom";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { PendingOrdersPanel } from "@/components/layout/PendingOrdersPanel";
 import { useEffect } from "react";
 import { useStockStore } from "@/lib/stock-store";
+import { ScanLine } from "lucide-react";
 
 export default function AppLayout() {
   const initialize = useStockStore((s) => s.initialize);
+  const location = useLocation();
+  const onScanner = location.pathname.startsWith("/app/scanner");
 
   useEffect(() => {
     initialize();
@@ -26,6 +29,15 @@ export default function AppLayout() {
             <PendingOrdersPanel />
           </div>
         </div>
+        {!onScanner && (
+          <Link
+            to="/app/scanner"
+            aria-label="Abrir scanner QR"
+            className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:scale-105 hover:bg-primary/90 md:hidden"
+          >
+            <ScanLine className="h-6 w-6" />
+          </Link>
+        )}
       </div>
     </SidebarProvider>
   );
