@@ -26,6 +26,15 @@ export interface Category {
 
 export type StockStatus = "garantido" | "baixo" | "zerado"
 
+// ── LOCATIONS (prateleiras / locais físicos) ───────────────
+export interface StockLocation {
+  id: string
+  name: string
+  description?: string
+  // refs to items stored at this location: array of `${categoryId}:${itemId}`
+  itemRefs: string[]
+}
+
 // ── SUPPLIERS ──────────────────────────────────────────────
 export interface Supplier {
   id: string

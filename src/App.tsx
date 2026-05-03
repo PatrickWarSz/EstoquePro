@@ -11,6 +11,8 @@ import PedidosPage from "./pages/PedidosPage";
 import FornecedoresPage from "./pages/FornecedoresPage";
 import HistoricoPage from "./pages/HistoricoPage";
 import ConfiguracoesPage from "./pages/ConfiguracoesPage";
+import ScannerPage from "./pages/ScannerPage";
+import EtiquetasPage from "./pages/EtiquetasPage";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +31,8 @@ const App = () => (
               <Route path="/app/pedidos" element={<PedidosPage />} />
               <Route path="/app/fornecedores" element={<FornecedoresPage />} />
               <Route path="/app/historico" element={<HistoricoPage />} />
+              <Route path="/app/scanner" element={<ScannerPage />} />
+              <Route path="/app/etiquetas" element={<EtiquetasPage />} />
               <Route path="/app/configuracoes" element={<ConfiguracoesPage />} />
               {/* compat com URLs antigas */}
               <Route path="/estoque" element={<Navigate to="/app/estoque" replace />} />
