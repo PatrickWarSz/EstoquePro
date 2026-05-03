@@ -1,4 +1,4 @@
-import { Boxes, Package, ShoppingCart, Truck, History, Settings } from "lucide-react";
+import { Boxes, Package, ShoppingCart, Truck, History, Settings, ScanLine, QrCode } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
@@ -19,9 +19,11 @@ const operacao = [
   { title: "Pedidos", url: "/app/pedidos", icon: ShoppingCart },
   { title: "Fornecedores", url: "/app/fornecedores", icon: Truck },
   { title: "Histórico", url: "/app/historico", icon: History },
+  { title: "Scanner QR", url: "/app/scanner", icon: ScanLine },
 ];
 
 const sistema = [
+  { title: "Etiquetas QR", url: "/app/etiquetas", icon: QrCode },
   { title: "Configurações", url: "/app/configuracoes", icon: Settings },
 ];
 
