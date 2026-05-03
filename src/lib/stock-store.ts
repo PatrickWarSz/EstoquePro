@@ -1,7 +1,7 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Category, StockItem, HistoryEntry, Supplier, Order, OrderDeliveryEntry } from './types'
+import type { Category, StockItem, HistoryEntry, Supplier, Order, OrderDeliveryEntry, StockLocation } from './types'
 
 // Gerador de ID à prova de falhas (funciona em qualquer navegador)
 const generateId = () => Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
@@ -37,6 +37,7 @@ export interface StockState {
   selectedCategoryId: string | null
   suppliers: Supplier[]
   orders: Order[]
+  locations: StockLocation[]
   loading: boolean
   clientId: string | null
 
@@ -64,6 +65,11 @@ export interface StockState {
   registerDelivery: (params: { orderId: string, deliveryDate: string, quantityDelivered: number, stockEntryQuantity?: number, notes?: string, createStockEntry: boolean }) => Promise<void>
   updateDelivery: (params: { orderId: string, deliveryDate: string, quantityDelivered: number, stockEntryQuantity?: number, notes?: string, createStockEntry: boolean }) => Promise<void>
   finalizeOrder: (orderId: string) => Promise<void>
+
+  addLocation: (location: Omit<StockLocation, 'id' | 'itemRefs'> & { itemRefs?: string[] }) => Promise<string>
+  updateLocation: (locationId: string, updates: Partial<Omit<StockLocation, 'id'>>) => Promise<void>
+  removeLocation: (locationId: string) => Promise<void>
+  toggleLocationItem: (locationId: string, ref: string) => Promise<void>
 }
 
 // ── Store ────────────────────────────────────────────────────
@@ -74,6 +80,7 @@ export const useStockStore = create<StockState>()(
       selectedCategoryId: null,
       suppliers: [],
       orders: [],
+      locations: [],
       loading: false,
       clientId: 'local-user',
 
@@ -359,6 +366,38 @@ export const useStockStore = create<StockState>()(
           orders: state.orders.map((o) =>
             o.id === orderId ? { ...o, deliveryStatus: 'Entrega Completa' } : o
           ),
+        }))
+      },
+
+      // ── Locations ─────────────────────────────────────────────
+      addLocation: async (location) => {
+        const newLocation: StockLocation = {
+          id: generateId(),
+          name: location.name,
+          description: location.description,
+          itemRefs: location.itemRefs || [],
+        }
+        set((state) => ({ locations: [...state.locations, newLocation] }))
+        return newLocation.id
+      },
+      updateLocation: async (locationId, updates) => {
+        set((state) => ({
+          locations: state.locations.map((l) => (l.id === locationId ? { ...l, ...updates } : l)),
+        }))
+      },
+      removeLocation: async (locationId) => {
+        set((state) => ({ locations: state.locations.filter((l) => l.id !== locationId) }))
+      },
+      toggleLocationItem: async (locationId, ref) => {
+        set((state) => ({
+          locations: state.locations.map((l) => {
+            if (l.id !== locationId) return l
+            const has = l.itemRefs.includes(ref)
+            return {
+              ...l,
+              itemRefs: has ? l.itemRefs.filter((r) => r !== ref) : [...l.itemRefs, ref],
+            }
+          }),
         }))
       },
     }),
