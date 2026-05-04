@@ -8,6 +8,9 @@ import {
   CheckCircle2,
   Flashlight,
   FlashlightOff,
+  Link2,
+  Repeat,
+  Undo2,
   MapPin,
   Package,
   ScanLine,
@@ -16,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Sheet,
@@ -24,8 +28,19 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useStockStore } from "@/lib/stock-store"
-import { parseQr } from "@/lib/qr"
+import { parseQr, qrKey } from "@/lib/qr"
+import { beep } from "@/lib/beep"
 import type { StockItem } from "@/lib/types"
 import { toast } from "sonner"
 
@@ -41,6 +56,20 @@ interface BatchRow {
   qty: string
 }
 
+// One reversible movement (single or batch). Stored only in memory: persists
+// while the page/scanner stays open, which is exactly the safety window we want.
+interface UndoEntry {
+  label: string
+  changes: Array<{
+    categoryId: string
+    itemId: string
+    itemName: string
+    unit: string
+    delta: number // signed: +entrada, -saida
+    previousQty: number
+  }>
+}
+
 export default function ScannerPage() {
   const containerId = "qr-reader-container"
   const scannerRef = useRef<Html5Qrcode | null>(null)
@@ -49,8 +78,18 @@ export default function ScannerPage() {
   const [lastText, setLastText] = useState<string | null>(null)
   const [torchOn, setTorchOn] = useState(false)
   const [torchSupported, setTorchSupported] = useState(false)
+  const [continuous, setContinuous] = useState(false)
+  const [soundOn, setSoundOn] = useState(true)
+  const continuousRef = useRef(false)
+  useEffect(() => { continuousRef.current = continuous }, [continuous])
 
-  const { categories, locations, updateItemQuantity } = useStockStore()
+  const {
+    categories,
+    locations,
+    updateItemQuantity,
+    qrAliases,
+    setQrAlias,
+  } = useStockStore()
 
   const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null)
   const [movementType, setMovementType] = useState<"entrada" | "saida">("saida")
@@ -62,6 +101,28 @@ export default function ScannerPage() {
   const [batchType, setBatchType] = useState<"entrada" | "saida">("saida")
   const [batchRows, setBatchRows] = useState<BatchRow[]>([])
   const [batchNote, setBatchNote] = useState("")
+
+  // Confirmation summary + Undo
+  const [summary, setSummary] = useState<null | {
+    kind: "single" | "batch"
+    title: string
+    type: "entrada" | "saida"
+    rows: Array<{
+      itemName: string
+      unit: string
+      qty: number
+      previous: number
+      next: number
+    }>
+  }>(null)
+  const [lastUndo, setLastUndo] = useState<UndoEntry | null>(null)
+
+  // Unknown QR — offer to bind it (alias) to an existing item/location
+  const [unknownPayload, setUnknownPayload] = useState<null | {
+    kind: "item" | "location"
+    key: string
+    raw: string
+  }>(null)
 
   const getVideoTrack = (): MediaStreamTrack | null => {
     const video = document.querySelector(
@@ -106,34 +167,64 @@ export default function ScannerPage() {
     setScanning(false)
   }
 
+  // Pause scanning while a sheet is open, but keep the camera "armed" so
+  // continuous mode can resume instantly without re-prompting permission.
+  const pauseScanner = async () => {
+    const s = scannerRef.current
+    if (!s) return
+    try {
+      if (s.isScanning) await s.stop()
+    } catch {}
+  }
+
   const handleDecoded = async (text: string) => {
     if (text === lastText) return
     setLastText(text)
 
-    const payload = parseQr(text)
+    let payload = parseQr(text)
+    // Allow re-routing a damaged/old QR via alias map
+    if (payload) {
+      const alias = qrAliases[qrKey(payload)]
+      if (alias) {
+        payload =
+          alias.kind === "item"
+            ? { kind: "item", categoryId: alias.categoryId, itemId: alias.itemId }
+            : { kind: "location", locationId: alias.locationId }
+      }
+    }
     if (!payload) {
-      toast.error("QR Code não reconhecido")
+      if (soundOn) beep("error")
+      toast.error("QR Code não reconhecido ou corrompido")
+      // Offer to bind this raw code to something existing.
+      setUnknownPayload({ kind: "item", key: text.trim(), raw: text.trim() })
+      await pauseScanner()
       return
     }
 
-    await stopScanner()
+    if (soundOn) beep("scan")
+    await pauseScanner()
 
     if (payload.kind === "item") {
       const cat = categories.find((c) => c.id === payload.categoryId)
       const item = cat?.items.find((i) => i.id === payload.itemId)
       if (!item || !cat) {
-        toast.error("Item não encontrado no estoque")
+        if (soundOn) beep("error")
+        toast.error("Item vinculado ao QR não existe mais")
+        setUnknownPayload({ kind: "item", key: qrKey(payload), raw: text.trim() })
         return
       }
       setSelectedItem({ categoryId: cat.id, item })
     } else {
       const loc = locations.find((l) => l.id === payload.locationId)
       if (!loc) {
-        toast.error("Local não encontrado")
+        if (soundOn) beep("error")
+        toast.error("Local vinculado ao QR não existe mais")
+        setUnknownPayload({ kind: "location", key: qrKey(payload), raw: text.trim() })
         return
       }
       if (loc.itemRefs.length === 0) {
         toast.error("Este local ainda não tem itens vinculados")
+        resumeIfContinuous()
         return
       }
       const rows: BatchRow[] = loc.itemRefs
@@ -181,6 +272,36 @@ export default function ScannerPage() {
     }
   }
 
+  // Resume an existing scanner instance (no permission re-prompt).
+  const resumeScanner = async () => {
+    const s = scannerRef.current
+    if (!s) {
+      // Nothing to resume — start fresh
+      await startScanner()
+      return
+    }
+    try {
+      setLastText(null)
+      await s.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 260, height: 260 } },
+        (decoded) => handleDecoded(decoded),
+        () => {},
+      )
+      setScanning(true)
+      setTimeout(detectTorchSupport, 300)
+    } catch {
+      await startScanner()
+    }
+  }
+
+  const resumeIfContinuous = () => {
+    if (continuousRef.current) {
+      // small delay so the sheet finishes closing
+      setTimeout(() => { resumeScanner() }, 150)
+    }
+  }
+
   useEffect(() => {
     return () => {
       stopScanner()
@@ -194,7 +315,7 @@ export default function ScannerPage() {
     setNote("")
   }
 
-  const confirmMovement = () => {
+  const reviewMovement = () => {
     if (!selectedItem) return
     const n = parseFloat(qty)
     if (isNaN(n) || n <= 0) {
@@ -205,22 +326,24 @@ export default function ScannerPage() {
       toast.error("Quantidade maior que o saldo")
       return
     }
-    const newQty =
+    const next =
       movementType === "entrada"
         ? selectedItem.item.quantity + n
         : selectedItem.item.quantity - n
-    updateItemQuantity(
-      selectedItem.categoryId,
-      selectedItem.item.id,
-      newQty,
-      movementType,
-      n,
-      note.trim() || undefined,
-    )
-    toast.success(
-      `${movementType === "entrada" ? "Entrada" : "Saída"} de ${n} ${selectedItem.item.unit} registrada`,
-    )
-    closeSheet()
+    setSummary({
+      kind: "single",
+      title: selectedItem.item.name,
+      type: movementType,
+      rows: [
+        {
+          itemName: selectedItem.item.name,
+          unit: selectedItem.item.unit,
+          qty: n,
+          previous: selectedItem.item.quantity,
+          next,
+        },
+      ],
+    })
   }
 
   const closeBatch = () => {
@@ -235,7 +358,7 @@ export default function ScannerPage() {
     )
   }
 
-  const confirmBatch = () => {
+  const reviewBatch = () => {
     const toApply = batchRows
       .map((r) => ({ row: r, n: parseFloat(r.qty) }))
       .filter(({ n }) => !isNaN(n) && n > 0)
@@ -257,25 +380,142 @@ export default function ScannerPage() {
       }
     }
 
-    toApply.forEach(({ row, n }) => {
-      const newQty =
-        batchType === "entrada"
-          ? row.item.quantity + n
-          : row.item.quantity - n
+    const loc = locations.find((l) => l.id === batchLocationId)
+    setSummary({
+      kind: "batch",
+      title: loc?.name || "Lote",
+      type: batchType,
+      rows: toApply.map(({ row, n }) => ({
+        itemName: row.item.name,
+        unit: row.item.unit,
+        qty: n,
+        previous: row.item.quantity,
+        next:
+          batchType === "entrada"
+            ? row.item.quantity + n
+            : row.item.quantity - n,
+      })),
+    })
+  }
+
+  const applySummary = () => {
+    if (!summary) return
+    const undo: UndoEntry = {
+      label:
+        summary.kind === "batch"
+          ? `${summary.title} — ${summary.rows.length} item(ns)`
+          : summary.title,
+      changes: [],
+    }
+
+    if (summary.kind === "single" && selectedItem) {
+      const r = summary.rows[0]
       updateItemQuantity(
-        row.categoryId,
-        row.item.id,
-        newQty,
-        batchType,
-        n,
-        batchNote.trim() || undefined,
+        selectedItem.categoryId,
+        selectedItem.item.id,
+        r.next,
+        summary.type,
+        r.qty,
+        note.trim() || undefined,
+      )
+      undo.changes.push({
+        categoryId: selectedItem.categoryId,
+        itemId: selectedItem.item.id,
+        itemName: r.itemName,
+        unit: r.unit,
+        delta: summary.type === "entrada" ? r.qty : -r.qty,
+        previousQty: r.previous,
+      })
+      closeSheet()
+    } else if (summary.kind === "batch") {
+      const filled = batchRows
+        .map((r) => ({ row: r, n: parseFloat(r.qty) }))
+        .filter(({ n }) => !isNaN(n) && n > 0)
+      filled.forEach(({ row, n }) => {
+        const next =
+          summary.type === "entrada" ? row.item.quantity + n : row.item.quantity - n
+        updateItemQuantity(
+          row.categoryId,
+          row.item.id,
+          next,
+          summary.type,
+          n,
+          batchNote.trim() || undefined,
+        )
+        undo.changes.push({
+          categoryId: row.categoryId,
+          itemId: row.item.id,
+          itemName: row.item.name,
+          unit: row.item.unit,
+          delta: summary.type === "entrada" ? n : -n,
+          previousQty: row.item.quantity,
+        })
+      })
+      closeBatch()
+    }
+
+    setLastUndo(undo)
+    if (soundOn) beep("success")
+    toast.success(
+      summary.kind === "batch"
+        ? `${undo.changes.length} movimentação(ões) registrada(s)`
+        : `${summary.type === "entrada" ? "Entrada" : "Saída"} registrada`,
+    )
+    setSummary(null)
+    resumeIfContinuous()
+  }
+
+  const undoLast = () => {
+    if (!lastUndo) return
+    lastUndo.changes.forEach((c) => {
+      // Reverse: restore previous quantity, log the inverse movement
+      const reverseType: "entrada" | "saida" =
+        c.delta >= 0 ? "saida" : "entrada"
+      updateItemQuantity(
+        c.categoryId,
+        c.itemId,
+        c.previousQty,
+        reverseType,
+        Math.abs(c.delta),
+        "Estorno do último lançamento",
       )
     })
+    if (soundOn) beep("success")
+    toast.success(`Lançamento revertido (${lastUndo.changes.length} item(ns))`)
+    setLastUndo(null)
+  }
 
-    toast.success(
-      `${toApply.length} ${batchType === "entrada" ? "entrada(s)" : "saída(s)"} registrada(s)`,
-    )
-    closeBatch()
+  // ── Bind unknown QR to an existing item/location ───────────
+  const [bindCategoryId, setBindCategoryId] = useState("")
+  const [bindItemId, setBindItemId] = useState("")
+  const [bindLocationId, setBindLocationId] = useState("")
+
+  const confirmBind = () => {
+    if (!unknownPayload) return
+    if (unknownPayload.kind === "item") {
+      if (!bindCategoryId || !bindItemId) {
+        toast.error("Selecione categoria e item")
+        return
+      }
+      setQrAlias(unknownPayload.key, {
+        kind: "item",
+        categoryId: bindCategoryId,
+        itemId: bindItemId,
+      })
+    } else {
+      if (!bindLocationId) {
+        toast.error("Selecione um local")
+        return
+      }
+      setQrAlias(unknownPayload.key, {
+        kind: "location",
+        locationId: bindLocationId,
+      })
+    }
+    toast.success("QR re-vinculado com sucesso")
+    setUnknownPayload(null)
+    setBindCategoryId(""); setBindItemId(""); setBindLocationId("")
+    resumeIfContinuous()
   }
 
   return (
@@ -290,6 +530,30 @@ export default function ScannerPage() {
           entrada/saída.
         </p>
       </header>
+
+      {/* Mode toggles */}
+      <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-card px-4 py-3">
+        <label className="flex items-center gap-2 text-sm">
+          <Switch checked={continuous} onCheckedChange={setContinuous} />
+          <span className="flex items-center gap-1.5">
+            <Repeat className="h-4 w-4" /> Modo contínuo
+          </span>
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <Switch checked={soundOn} onCheckedChange={setSoundOn} />
+          <span>Bip ao ler</span>
+        </label>
+        {lastUndo && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto"
+            onClick={undoLast}
+          >
+            <Undo2 className="mr-2 h-4 w-4" /> Desfazer último
+          </Button>
+        )}
+      </div>
 
       <div className="overflow-hidden rounded-xl border bg-card">
         <div className="relative aspect-square w-full bg-black">
@@ -339,11 +603,12 @@ export default function ScannerPage() {
 
       <div className="rounded-xl border bg-muted/30 p-4 text-xs text-muted-foreground">
         💡 Imprima as etiquetas em <strong>Configurações → Etiquetas QR</strong>{" "}
-        e cole no rolo, caixa ou prateleira.
+        e cole no rolo, caixa ou prateleira. QRs antigos ou danificados podem
+        ser <strong>re-vinculados</strong> sem reimprimir.
       </div>
 
       {/* Bottom sheet — batch movements from a shelf/location */}
-      <Sheet open={!!batchLocationId} onOpenChange={(o) => !o && closeBatch()}>
+      <Sheet open={!!batchLocationId} onOpenChange={(o) => { if (!o) { closeBatch(); resumeIfContinuous() } }}>
         <SheetContent side="bottom" className="rounded-t-2xl">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
@@ -436,11 +701,11 @@ export default function ScannerPage() {
             </div>
 
             <div className="flex gap-2 pt-1">
-              <Button variant="outline" className="flex-1" onClick={closeBatch}>
+              <Button variant="outline" className="flex-1" onClick={() => { closeBatch(); resumeIfContinuous() }}>
                 <X className="mr-2 h-4 w-4" /> Cancelar
               </Button>
-              <Button className="flex-1" onClick={confirmBatch}>
-                <CheckCircle2 className="mr-2 h-4 w-4" /> Confirmar
+              <Button className="flex-1" onClick={reviewBatch}>
+                <CheckCircle2 className="mr-2 h-4 w-4" /> Revisar
               </Button>
             </div>
           </div>
@@ -448,7 +713,7 @@ export default function ScannerPage() {
       </Sheet>
 
       {/* Bottom sheet — movement */}
-      <Sheet open={!!selectedItem} onOpenChange={(o) => !o && closeSheet()}>
+      <Sheet open={!!selectedItem} onOpenChange={(o) => { if (!o) { closeSheet(); resumeIfContinuous() } }}>
         <SheetContent side="bottom" className="rounded-t-2xl">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
@@ -523,11 +788,176 @@ export default function ScannerPage() {
             </div>
 
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" onClick={closeSheet}>
+              <Button variant="outline" className="flex-1" onClick={() => { closeSheet(); resumeIfContinuous() }}>
                 <X className="mr-2 h-4 w-4" /> Cancelar
               </Button>
-              <Button className="flex-1" onClick={confirmMovement}>
-                <CheckCircle2 className="mr-2 h-4 w-4" /> Confirmar
+              <Button className="flex-1" onClick={reviewMovement}>
+                <CheckCircle2 className="mr-2 h-4 w-4" /> Revisar
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Confirmation summary */}
+      <AlertDialog
+        open={!!summary}
+        onOpenChange={(o) => { if (!o) setSummary(null) }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Confirmar {summary?.type === "entrada" ? "entrada" : "saída"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {summary?.kind === "batch"
+                ? `${summary?.rows.length} item(ns) afetado(s) em "${summary?.title}". Revise os saldos resultantes antes de confirmar.`
+                : `Revise o saldo resultante de "${summary?.title}".`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {summary && (
+            <div className="space-y-2">
+              <div className="rounded-lg bg-muted/50 px-3 py-2 text-sm">
+                <strong>Total movimentado:</strong>{" "}
+                {summary.rows.reduce((s, r) => s + r.qty, 0).toLocaleString("pt-BR")}{" "}
+                <span className="text-muted-foreground">
+                  ({summary.rows.length} item(ns))
+                </span>
+              </div>
+              <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border p-2">
+                {summary.rows.map((r, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between gap-2 rounded-md bg-card px-2 py-1.5 text-sm"
+                  >
+                    <span className="min-w-0 flex-1 truncate font-medium">
+                      {r.itemName}
+                    </span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {r.previous.toLocaleString("pt-BR")}
+                      <span className="mx-1">→</span>
+                      <strong
+                        className={
+                          summary.type === "entrada"
+                            ? "text-success"
+                            : "text-destructive"
+                        }
+                      >
+                        {r.next.toLocaleString("pt-BR")}
+                      </strong>{" "}
+                      <span className="text-xs">{r.unit}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={applySummary}>
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Unknown / orphan QR — re-bind */}
+      <Sheet
+        open={!!unknownPayload}
+        onOpenChange={(o) => { if (!o) { setUnknownPayload(null); resumeIfContinuous() } }}
+      >
+        <SheetContent side="bottom" className="rounded-t-2xl">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5 text-primary" /> Re-vincular este QR
+            </SheetTitle>
+            <SheetDescription>
+              Este QR não está vinculado a nada (ou o item original foi removido).
+              Você pode <strong>reaproveitar a etiqueta</strong> apontando para
+              um item ou local existente — sem reimprimir.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-4 space-y-4 pb-4">
+            <div className="rounded-md border bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground break-all">
+              {unknownPayload?.raw}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant={unknownPayload?.kind === "item" ? "default" : "outline"}
+                onClick={() =>
+                  setUnknownPayload((p) => p && { ...p, kind: "item" })
+                }
+              >
+                <Package className="mr-2 h-4 w-4" /> Item
+              </Button>
+              <Button
+                variant={unknownPayload?.kind === "location" ? "default" : "outline"}
+                onClick={() =>
+                  setUnknownPayload((p) => p && { ...p, kind: "location" })
+                }
+              >
+                <MapPin className="mr-2 h-4 w-4" /> Local
+              </Button>
+            </div>
+
+            {unknownPayload?.kind === "item" ? (
+              <div className="grid gap-2">
+                <Label>Categoria</Label>
+                <select
+                  className="h-10 rounded-md border bg-background px-2 text-sm"
+                  value={bindCategoryId}
+                  onChange={(e) => { setBindCategoryId(e.target.value); setBindItemId("") }}
+                >
+                  <option value="">Selecione…</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <Label>Item</Label>
+                <select
+                  className="h-10 rounded-md border bg-background px-2 text-sm"
+                  value={bindItemId}
+                  onChange={(e) => setBindItemId(e.target.value)}
+                  disabled={!bindCategoryId}
+                >
+                  <option value="">Selecione…</option>
+                  {categories
+                    .find((c) => c.id === bindCategoryId)
+                    ?.items.map((i) => (
+                      <option key={i.id} value={i.id}>{i.name}</option>
+                    ))}
+                </select>
+              </div>
+            ) : (
+              <div className="grid gap-2">
+                <Label>Local</Label>
+                <select
+                  className="h-10 rounded-md border bg-background px-2 text-sm"
+                  value={bindLocationId}
+                  onChange={(e) => setBindLocationId(e.target.value)}
+                >
+                  <option value="">Selecione…</option>
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setUnknownPayload(null); resumeIfContinuous() }}
+              >
+                <X className="mr-2 h-4 w-4" /> Cancelar
+              </Button>
+              <Button className="flex-1" onClick={confirmBind}>
+                <Link2 className="mr-2 h-4 w-4" /> Vincular
               </Button>
             </div>
           </div>
