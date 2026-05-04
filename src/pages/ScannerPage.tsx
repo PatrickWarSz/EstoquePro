@@ -73,8 +73,7 @@ export default function ScannerPage() {
 
   const detectTorchSupport = () => {
     const track = getVideoTrack()
-    // @ts-expect-error torch is a non-standard capability
-    const caps = track?.getCapabilities?.() as { torch?: boolean } | undefined
+    const caps = (track?.getCapabilities?.() as { torch?: boolean } | undefined)
     setTorchSupported(!!caps?.torch)
   }
 
