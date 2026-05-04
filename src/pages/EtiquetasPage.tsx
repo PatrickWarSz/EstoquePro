@@ -18,6 +18,7 @@ import { useStockStore } from "@/lib/stock-store"
 import { encodeItemQr, encodeLocationQr } from "@/lib/qr"
 import { QrImage } from "@/components/qr/qr-image"
 import { toast } from "sonner"
+import QRCode from "qrcode"
 import type { StockLocation } from "@/lib/types"
 
 interface PrintItem {
@@ -26,48 +27,55 @@ interface PrintItem {
   payload: string
 }
 
-function openPrintWindow(items: PrintItem[]) {
+async function openPrintWindow(items: PrintItem[]) {
   if (items.length === 0) {
     toast.error("Selecione ao menos um item")
     return
   }
+  // Pre-generate QR codes as data URLs so the print window doesn't depend on a CDN
+  const withQr = await Promise.all(
+    items.map(async (it) => ({
+      ...it,
+      dataUrl: await QRCode.toDataURL(it.payload, {
+        width: 600,
+        margin: 1,
+        errorCorrectionLevel: "M",
+      }),
+    })),
+  )
   const w = window.open("", "_blank", "width=900,height=700")
   if (!w) return toast.error("Bloqueio de pop-up. Permita pop-ups para imprimir.")
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas QR</title>
 <style>
   *{box-sizing:border-box}
-  body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:12mm;background:#fff;color:#000}
-  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8mm}
-  .label{border:1px dashed #999;border-radius:8px;padding:6mm;text-align:center;page-break-inside:avoid;display:flex;flex-direction:column;align-items:center;gap:4mm}
-  .label canvas, .label img{width:32mm;height:32mm}
-  .label .title{font-weight:600;font-size:11pt;line-height:1.2;margin:0}
-  .label .subtitle{font-size:8pt;color:#555;margin:0}
-  @media print{body{padding:8mm}}
+  @page { size: 100mm 150mm; margin: 0; }
+  html, body { margin: 0; padding: 0; background:#fff; color:#000;
+    font-family:-apple-system,Segoe UI,Roboto,sans-serif; }
+  .label{
+    width:100mm; height:150mm;
+    padding:6mm;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; gap:4mm;
+    page-break-after: always; break-after: page;
+  }
+  .label:last-child { page-break-after: auto; break-after: auto; }
+  .label img { width:70mm; height:70mm; display:block; }
+  .label .title { font-weight:700; font-size:14pt; line-height:1.2; margin:0;
+    word-break: break-word; max-width:90mm; }
+  .label .subtitle { font-size:10pt; color:#333; margin:0; max-width:90mm; }
+  @media screen { body { padding:12mm; background:#eee; }
+    .label { background:#fff; margin:6mm auto; box-shadow:0 1px 6px rgba(0,0,0,.15); } }
 </style></head><body>
-<div class="grid">
-${items
+${withQr
   .map(
     (it) => `<div class="label">
-  <div id="qr-${encodeURIComponent(it.payload)}"></div>
-  <div>
-    <p class="title">${it.title}</p>
-    <p class="subtitle">${it.subtitle}</p>
-  </div>
+  <img src="${it.dataUrl}" alt="QR" />
+  <p class="title">${it.title}</p>
+  <p class="subtitle">${it.subtitle}</p>
 </div>`,
   )
   .join("")}
-</div>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-<script>
-  const items = ${JSON.stringify(items)};
-  Promise.all(items.map(it => new Promise(res => {
-    const c = document.createElement('canvas');
-    QRCode.toCanvas(c, it.payload, { width: 240, margin: 1 }, () => {
-      document.getElementById('qr-' + encodeURIComponent(it.payload)).appendChild(c);
-      res();
-    });
-  }))).then(() => setTimeout(() => window.print(), 200));
-<\/script>
+<script>window.addEventListener('load', () => setTimeout(() => window.print(), 300));<\/script>
 </body></html>`
   w.document.open()
   w.document.write(html)
