@@ -3,6 +3,12 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Category, StockItem, HistoryEntry, Supplier, Order, OrderDeliveryEntry, StockLocation } from './types'
 
+// QR alias map — re-route a scanned QR (by its stable key) to a different
+// item/location without reprinting. Example key: "item:catId:itemId".
+export type QrAlias =
+  | { kind: 'item'; categoryId: string; itemId: string }
+  | { kind: 'location'; locationId: string }
+
 // Gerador de ID à prova de falhas (funciona em qualquer navegador)
 const generateId = () => Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
 
@@ -40,6 +46,7 @@ export interface StockState {
   locations: StockLocation[]
   loading: boolean
   clientId: string | null
+  qrAliases: Record<string, QrAlias>
 
   initialize: () => Promise<void>
   setSelectedCategory: (id: string) => void
@@ -70,6 +77,9 @@ export interface StockState {
   updateLocation: (locationId: string, updates: Partial<Omit<StockLocation, 'id'>>) => Promise<void>
   removeLocation: (locationId: string) => Promise<void>
   toggleLocationItem: (locationId: string, ref: string) => Promise<void>
+
+  setQrAlias: (key: string, alias: QrAlias) => void
+  removeQrAlias: (key: string) => void
 }
 
 // ── Store ────────────────────────────────────────────────────
@@ -83,6 +93,7 @@ export const useStockStore = create<StockState>()(
       locations: [],
       loading: false,
       clientId: 'local-user',
+      qrAliases: {},
 
       initialize: async () => {
         set({ loading: false })
@@ -400,6 +411,15 @@ export const useStockStore = create<StockState>()(
           }),
         }))
       },
+
+      setQrAlias: (key, alias) =>
+        set((state) => ({ qrAliases: { ...state.qrAliases, [key]: alias } })),
+      removeQrAlias: (key) =>
+        set((state) => {
+          const next = { ...state.qrAliases }
+          delete next[key]
+          return { qrAliases: next }
+        }),
     }),
     {
       // NOME NOVO PARA IGNORAR LIXO ANTIGO NO SEU NAVEGADOR E COMEÇAR FRESCO:
