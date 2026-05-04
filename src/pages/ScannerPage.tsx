@@ -6,6 +6,8 @@ import {
   Camera,
   CameraOff,
   CheckCircle2,
+  Flashlight,
+  FlashlightOff,
   MapPin,
   Package,
   ScanLine,
@@ -32,23 +34,70 @@ interface SelectedItem {
   item: StockItem
 }
 
+interface BatchRow {
+  categoryId: string
+  categoryName: string
+  item: StockItem
+  qty: string
+}
+
 export default function ScannerPage() {
   const containerId = "qr-reader-container"
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const [scanning, setScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastText, setLastText] = useState<string | null>(null)
+  const [torchOn, setTorchOn] = useState(false)
+  const [torchSupported, setTorchSupported] = useState(false)
 
   const { categories, locations, updateItemQuantity } = useStockStore()
 
   const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null)
-  const [pickFromLocationId, setPickFromLocationId] = useState<string | null>(null)
   const [movementType, setMovementType] = useState<"entrada" | "saida">("saida")
   const [qty, setQty] = useState("")
   const [note, setNote] = useState("")
 
+  // Batch (shelf / location) state
+  const [batchLocationId, setBatchLocationId] = useState<string | null>(null)
+  const [batchType, setBatchType] = useState<"entrada" | "saida">("saida")
+  const [batchRows, setBatchRows] = useState<BatchRow[]>([])
+  const [batchNote, setBatchNote] = useState("")
+
+  const getVideoTrack = (): MediaStreamTrack | null => {
+    const video = document.querySelector(
+      `#${containerId} video`,
+    ) as HTMLVideoElement | null
+    const stream = video?.srcObject as MediaStream | null
+    return stream?.getVideoTracks?.()[0] ?? null
+  }
+
+  const detectTorchSupport = () => {
+    const track = getVideoTrack()
+    // @ts-expect-error torch is a non-standard capability
+    const caps = track?.getCapabilities?.() as { torch?: boolean } | undefined
+    setTorchSupported(!!caps?.torch)
+  }
+
+  const toggleTorch = async () => {
+    const track = getVideoTrack()
+    if (!track) return
+    try {
+      const next = !torchOn
+      await track.applyConstraints({
+        // @ts-expect-error torch is a non-standard constraint
+        advanced: [{ torch: next }],
+      })
+      setTorchOn(next)
+    } catch {
+      toast.error("Não foi possível ativar a lanterna neste dispositivo")
+      setTorchSupported(false)
+    }
+  }
+
   const stopScanner = async () => {
     const s = scannerRef.current
+    setTorchOn(false)
+    setTorchSupported(false)
     if (!s) return
     try {
       if (s.isScanning) await s.stop()
@@ -88,7 +137,24 @@ export default function ScannerPage() {
         toast.error("Este local ainda não tem itens vinculados")
         return
       }
-      setPickFromLocationId(loc.id)
+      const rows: BatchRow[] = loc.itemRefs
+        .map((ref) => {
+          const [catId, itemId] = ref.split(":")
+          const cat = categories.find((c) => c.id === catId)
+          const item = cat?.items.find((i) => i.id === itemId)
+          if (!cat || !item) return null
+          return {
+            categoryId: cat.id,
+            categoryName: cat.name,
+            item,
+            qty: "",
+          } as BatchRow
+        })
+        .filter(Boolean) as BatchRow[]
+      setBatchRows(rows)
+      setBatchType("saida")
+      setBatchNote("")
+      setBatchLocationId(loc.id)
     }
   }
 
@@ -105,6 +171,8 @@ export default function ScannerPage() {
         () => {},
       )
       setScanning(true)
+      // Wait a tick for the video track to be live, then probe torch capability
+      setTimeout(detectTorchSupport, 500)
     } catch (e: any) {
       setError(
         e?.message ||
@@ -156,24 +224,60 @@ export default function ScannerPage() {
     closeSheet()
   }
 
-  const locationItems = (() => {
-    if (!pickFromLocationId) return []
-    const loc = locations.find((l) => l.id === pickFromLocationId)
-    if (!loc) return []
-    return loc.itemRefs
-      .map((ref) => {
-        const [catId, itemId] = ref.split(":")
-        const cat = categories.find((c) => c.id === catId)
-        const item = cat?.items.find((i) => i.id === itemId)
-        if (!cat || !item) return null
-        return { categoryId: cat.id, categoryName: cat.name, item }
-      })
-      .filter(Boolean) as Array<{
-      categoryId: string
-      categoryName: string
-      item: StockItem
-    }>
-  })()
+  const closeBatch = () => {
+    setBatchLocationId(null)
+    setBatchRows([])
+    setBatchNote("")
+  }
+
+  const updateBatchQty = (idx: number, value: string) => {
+    setBatchRows((rows) =>
+      rows.map((r, i) => (i === idx ? { ...r, qty: value } : r)),
+    )
+  }
+
+  const confirmBatch = () => {
+    const toApply = batchRows
+      .map((r) => ({ row: r, n: parseFloat(r.qty) }))
+      .filter(({ n }) => !isNaN(n) && n > 0)
+
+    if (toApply.length === 0) {
+      toast.error("Informe a quantidade em pelo menos um item")
+      return
+    }
+
+    if (batchType === "saida") {
+      const insufficient = toApply.find(
+        ({ row, n }) => n > row.item.quantity,
+      )
+      if (insufficient) {
+        toast.error(
+          `Saldo insuficiente em "${insufficient.row.item.name}"`,
+        )
+        return
+      }
+    }
+
+    toApply.forEach(({ row, n }) => {
+      const newQty =
+        batchType === "entrada"
+          ? row.item.quantity + n
+          : row.item.quantity - n
+      updateItemQuantity(
+        row.categoryId,
+        row.item.id,
+        newQty,
+        batchType,
+        n,
+        batchNote.trim() || undefined,
+      )
+    })
+
+    toast.success(
+      `${toApply.length} ${batchType === "entrada" ? "entrada(s)" : "saída(s)"} registrada(s)`,
+    )
+    closeBatch()
+  }
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-6">
@@ -194,6 +298,20 @@ export default function ScannerPage() {
             id={containerId}
             className="absolute inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
           />
+          {scanning && torchSupported && (
+            <button
+              type="button"
+              onClick={toggleTorch}
+              aria-label={torchOn ? "Desligar lanterna" : "Ligar lanterna"}
+              className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition hover:bg-black/70 active:scale-95"
+            >
+              {torchOn ? (
+                <Flashlight className="h-5 w-5 text-yellow-300" />
+              ) : (
+                <FlashlightOff className="h-5 w-5" />
+              )}
+            </button>
+          )}
           {!scanning && !error && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/80">
               <Camera className="h-10 w-10" />
@@ -225,37 +343,107 @@ export default function ScannerPage() {
         e cole no rolo, caixa ou prateleira.
       </div>
 
-      {/* Bottom sheet — pick item from location */}
-      <Sheet open={!!pickFromLocationId} onOpenChange={(o) => !o && setPickFromLocationId(null)}>
+      {/* Bottom sheet — batch movements from a shelf/location */}
+      <Sheet open={!!batchLocationId} onOpenChange={(o) => !o && closeBatch()}>
         <SheetContent side="bottom" className="rounded-t-2xl">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <MapPin className="h-5 w-5 text-primary" />
-              {locations.find((l) => l.id === pickFromLocationId)?.name}
+              {locations.find((l) => l.id === batchLocationId)?.name}
             </SheetTitle>
             <SheetDescription>
-              Selecione o item desta prateleira para movimentar.
+              Preencha a quantidade apenas dos itens movimentados. Em branco = ignorar.
             </SheetDescription>
           </SheetHeader>
-          <div className="mt-4 grid max-h-[60vh] gap-2 overflow-y-auto pb-4">
-            {locationItems.map(({ categoryId, categoryName, item }) => (
-              <button
-                key={`${categoryId}:${item.id}`}
-                onClick={() => {
-                  setPickFromLocationId(null)
-                  setSelectedItem({ categoryId, item })
-                }}
-                className="flex items-center justify-between rounded-lg border bg-card p-3 text-left transition hover:border-primary hover:bg-accent"
+
+          <div className="mt-4 space-y-4 pb-4">
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={batchType === "entrada" ? "default" : "outline"}
+                onClick={() => setBatchType("entrada")}
+                className={
+                  batchType === "entrada"
+                    ? "bg-success text-white hover:bg-success/90"
+                    : ""
+                }
               >
-                <div>
-                  <div className="font-medium">{item.name}</div>
-                  <div className="text-xs text-muted-foreground">{categoryName}</div>
-                </div>
-                <div className="text-sm tabular-nums">
-                  {item.quantity.toLocaleString("pt-BR")} {item.unit}
-                </div>
-              </button>
-            ))}
+                <ArrowDownCircle className="mr-2 h-4 w-4" /> Entrada
+              </Button>
+              <Button
+                type="button"
+                variant={batchType === "saida" ? "default" : "outline"}
+                onClick={() => setBatchType("saida")}
+                className={
+                  batchType === "saida"
+                    ? "bg-destructive text-white hover:bg-destructive/90"
+                    : ""
+                }
+              >
+                <ArrowUpCircle className="mr-2 h-4 w-4" /> Saída
+              </Button>
+            </div>
+
+            <div className="grid max-h-[45vh] gap-2 overflow-y-auto rounded-lg border bg-muted/20 p-2">
+              {batchRows.map((row, idx) => {
+                const filled = row.qty.trim() !== "" && parseFloat(row.qty) > 0
+                return (
+                  <div
+                    key={`${row.categoryId}:${row.item.id}`}
+                    className={`flex items-center gap-3 rounded-md border bg-card p-2 transition ${
+                      filled ? "border-primary ring-1 ring-primary/30" : ""
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">
+                        {row.item.name}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Saldo: {row.item.quantity.toLocaleString("pt-BR")}{" "}
+                        {row.item.unit}
+                      </div>
+                    </div>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      placeholder="0"
+                      value={row.qty}
+                      onChange={(e) => updateBatchQty(idx, e.target.value)}
+                      className="h-10 w-24 text-right text-base tabular-nums"
+                    />
+                    <span className="w-10 text-xs text-muted-foreground">
+                      {row.item.unit}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="space-y-2">
+              <Label>
+                Observação{" "}
+                <span className="font-normal text-muted-foreground">
+                  (aplicada a todos)
+                </span>
+              </Label>
+              <Textarea
+                value={batchNote}
+                onChange={(e) => setBatchNote(e.target.value)}
+                rows={2}
+                className="resize-none"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="flex-1" onClick={closeBatch}>
+                <X className="mr-2 h-4 w-4" /> Cancelar
+              </Button>
+              <Button className="flex-1" onClick={confirmBatch}>
+                <CheckCircle2 className="mr-2 h-4 w-4" /> Confirmar
+              </Button>
+            </div>
           </div>
         </SheetContent>
       </Sheet>
