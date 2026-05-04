@@ -189,18 +189,19 @@ export default function ScannerPage() {
       </header>
 
       <div className="overflow-hidden rounded-xl border bg-card">
-        <div
-          id={containerId}
-          className="aspect-square w-full bg-black [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
-        >
+        <div className="relative aspect-square w-full bg-black">
+          <div
+            id={containerId}
+            className="absolute inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
+          />
           {!scanning && !error && (
-            <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-white/80">
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/80">
               <Camera className="h-10 w-10" />
               <p className="text-sm">Câmera desligada</p>
             </div>
           )}
           {error && (
-            <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center text-white/90">
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-white/90">
               <CameraOff className="h-10 w-10" />
               <p className="text-sm">{error}</p>
             </div>
