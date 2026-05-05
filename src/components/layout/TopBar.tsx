@@ -1,15 +1,26 @@
-import { Search, Moon, Sun, AlertTriangle } from "lucide-react";
+import { Search, Moon, Sun, AlertTriangle, LogOut, User as UserIcon, Shield } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 import { useStockStore } from "@/lib/stock-store";
+import { useAuthStore } from "@/lib/auth-store";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export function TopBar() {
   const { theme, setTheme } = useTheme();
   const { categories } = useStockStore();
+  const user = useAuthStore((s) => s.getCurrentUser());
+  const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
 
@@ -63,6 +74,43 @@ export function TopBar() {
         >
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
+        {user && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 gap-2 px-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-primary">
+                  {user.kind === "admin" ? <Shield className="h-3.5 w-3.5" /> : <UserIcon className="h-3.5 w-3.5" />}
+                </div>
+                <span className="hidden text-xs font-medium md:inline">{user.name}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>
+                <div className="font-semibold">{user.name}</div>
+                <div className="text-xs font-normal text-muted-foreground">
+                  @{user.username} · {user.kind === "admin" ? "Administrador" : "Operador"}
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {user.kind === "admin" && (
+                <DropdownMenuItem onClick={() => navigate("/app/funcionarios")}>
+                  <UserIcon className="mr-2 h-4 w-4" />
+                  Funcionários
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onClick={() => {
+                  logout();
+                  navigate("/login");
+                }}
+                className="text-destructive focus:text-destructive"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Sair
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </header>
   );
