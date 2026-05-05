@@ -81,10 +81,10 @@ interface AuthState {
   currentUserId: string | null // 'admin' | employee.id | null
 
   setupAdmin: (input: { username: string; password: string; name: string; companyName?: string }) => Promise<void>
-  login: (username: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
+  login: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>
   logout: () => void
 
-  addEmployee: (input: { username: string; password: string; name: string; permissions: Permissions }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
+  addEmployee: (input: { username: string; password: string; name: string; permissions: Permissions }) => Promise<{ ok: boolean; id?: string; error?: string }>
   updateEmployee: (id: string, updates: Partial<Pick<Employee, "name" | "permissions" | "active">>) => void
   resetEmployeePassword: (id: string, newPassword: string) => Promise<void>
   removeEmployee: (id: string) => void
