@@ -9,6 +9,18 @@ export type QrAlias =
   | { kind: 'item'; categoryId: string; itemId: string }
   | { kind: 'location'; locationId: string }
 
+import { useAuthStore } from './auth-store'
+
+function getCurrentOperator(): { id?: string; name?: string } {
+  try {
+    const u = useAuthStore.getState().getCurrentUser()
+    if (!u) return {}
+    return { id: u.id, name: u.name }
+  } catch {
+    return {}
+  }
+}
+
 // Gerador de ID à prova de falhas (funciona em qualquer navegador)
 const generateId = () => Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
 
@@ -142,6 +154,7 @@ export const useStockStore = create<StockState>()(
       },
 
       updateItemQuantity: async (categoryId, itemId, newQuantity, type, movementQty, note, orderId) => {
+        const op = getCurrentOperator()
         const newEntry: HistoryEntry = {
           type,
           quantity: movementQty,
@@ -149,6 +162,8 @@ export const useStockStore = create<StockState>()(
           newTotal: newQuantity,
           note,
           orderId,
+          operatorId: op.id,
+          operatorName: op.name,
         }
 
         set((state) => ({
@@ -279,6 +294,7 @@ export const useStockStore = create<StockState>()(
           let newCategories = state.categories
 
           if (createStockEntry && order.linkedCategoryId && order.linkedItemId && stockEntryQuantity && stockEntryQuantity > 0) {
+            const op = getCurrentOperator()
             newCategories = newCategories.map((cat) => {
               if (cat.id !== order.linkedCategoryId) return cat
               return {
@@ -292,7 +308,9 @@ export const useStockStore = create<StockState>()(
                     newTotal: newQty,
                     note: `Pedido #${orderId.slice(-6).toUpperCase()} — ${quantityDelivered} ${order.unit || 'un'} entregues`,
                     orderId,
-                    date: new Date().toISOString()
+                    date: new Date().toISOString(),
+                    operatorId: op.id,
+                    operatorName: op.name,
                   }
                   return { ...item, quantity: newQty, history: [...item.history, histEntry] }
                 })
@@ -344,6 +362,7 @@ export const useStockStore = create<StockState>()(
           }
 
           if (createStockEntry && order.linkedCategoryId && order.linkedItemId && stockEntryQuantity && stockEntryQuantity > 0) {
+            const op = getCurrentOperator()
             newCategories = newCategories.map((cat) => {
               if (cat.id !== order.linkedCategoryId) return cat
               return {
@@ -357,7 +376,9 @@ export const useStockStore = create<StockState>()(
                     newTotal: newQty,
                     note: `Pedido #${orderId.slice(-6).toUpperCase()} — ${quantityDelivered} ${order.unit || 'un'} entregues (editado)`,
                     orderId,
-                    date: new Date().toISOString()
+                    date: new Date().toISOString(),
+                    operatorId: op.id,
+                    operatorName: op.name,
                   }
                   return { ...item, quantity: newQty, history: [...item.history, histEntry] }
                 })

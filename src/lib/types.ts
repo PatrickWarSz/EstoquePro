@@ -5,6 +5,8 @@ export interface HistoryEntry {
   newTotal: number
   note?: string
   orderId?: string // reference to order if entry came from an order
+  operatorId?: string
+  operatorName?: string
 }
 
 export interface StockItem {
