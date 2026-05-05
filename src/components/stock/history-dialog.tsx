@@ -101,6 +101,14 @@ export function HistoryDialog({ item, open, onOpenChange }: HistoryDialogProps) 
                         {entry.type === "entrada" ? "Entrada" : "Saída"} -{" "}
                         Estoque após: {entry.newTotal} {item.unit}
                       </p>
+                      {entry.operatorName && (
+                        <p className="text-[11px] font-medium text-muted-foreground">
+                          Operador: {entry.operatorName}
+                        </p>
+                      )}
+                      {entry.note && (
+                        <p className="text-[11px] italic text-muted-foreground">{entry.note}</p>
+                      )}
                     </div>
                   </div>
                 ))}

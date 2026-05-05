@@ -7,7 +7,7 @@ export default function HistoricoPage() {
   const { categories } = useStockStore();
 
   const entries = useMemo(() => {
-    const arr: { itemName: string; categoryName: string; type: string; quantity: number; date: string; newTotal: number; note?: string }[] = [];
+    const arr: { itemName: string; categoryName: string; type: string; quantity: number; date: string; newTotal: number; note?: string; operatorName?: string }[] = [];
     (categories || []).forEach((c) => {
       c.items.forEach((it) => {
         it.history.forEach((h) => arr.push({ itemName: it.name, categoryName: c.name, ...h }));
@@ -40,6 +40,7 @@ export default function HistoricoPage() {
                   <th className="px-4 py-2.5 font-medium text-muted-foreground">Data</th>
                   <th className="px-4 py-2.5 font-medium text-muted-foreground">Item</th>
                   <th className="px-4 py-2.5 font-medium text-muted-foreground">Categoria</th>
+                  <th className="px-4 py-2.5 font-medium text-muted-foreground">Operador</th>
                   <th className="px-4 py-2.5 font-medium text-muted-foreground">Tipo</th>
                   <th className="px-4 py-2.5 font-medium text-muted-foreground text-right">Qtd</th>
                   <th className="px-4 py-2.5 font-medium text-muted-foreground text-right">Total</th>
@@ -51,6 +52,7 @@ export default function HistoricoPage() {
                     <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{new Date(e.date).toLocaleString("pt-BR")}</td>
                     <td className="px-4 py-2.5 font-medium">{e.itemName}</td>
                     <td className="px-4 py-2.5 text-muted-foreground">{e.categoryName}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground">{e.operatorName || "—"}</td>
                     <td className="px-4 py-2.5">
                       <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${e.type === "entrada" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"}`}>
                         {e.type === "entrada" ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />}

@@ -1,4 +1,4 @@
-import { Boxes, Package, ShoppingCart, Truck, History, Settings, ScanLine, QrCode } from "lucide-react";
+import { Boxes, Package, ShoppingCart, Truck, History, Settings, ScanLine, QrCode, Users } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
@@ -13,27 +13,35 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useStockStore } from "@/lib/stock-store";
+import { ModuleKey, useAuthStore } from "@/lib/auth-store";
 
-const operacao = [
-  { title: "Estoque", url: "/app/estoque", icon: Package },
-  { title: "Pedidos", url: "/app/pedidos", icon: ShoppingCart },
-  { title: "Fornecedores", url: "/app/fornecedores", icon: Truck },
-  { title: "Histórico", url: "/app/historico", icon: History },
-  { title: "Scanner QR", url: "/app/scanner", icon: ScanLine },
+type NavItem = { title: string; url: string; icon: any; module: ModuleKey };
+
+const operacaoAll: NavItem[] = [
+  { title: "Estoque", url: "/app/estoque", icon: Package, module: "estoque" },
+  { title: "Pedidos", url: "/app/pedidos", icon: ShoppingCart, module: "pedidos" },
+  { title: "Fornecedores", url: "/app/fornecedores", icon: Truck, module: "fornecedores" },
+  { title: "Histórico", url: "/app/historico", icon: History, module: "historico" },
+  { title: "Scanner QR", url: "/app/scanner", icon: ScanLine, module: "scanner" },
 ];
 
-const sistema = [
-  { title: "Etiquetas QR", url: "/app/etiquetas", icon: QrCode },
-  { title: "Configurações", url: "/app/configuracoes", icon: Settings },
+const sistemaAll: NavItem[] = [
+  { title: "Etiquetas QR", url: "/app/etiquetas", icon: QrCode, module: "etiquetas" },
+  { title: "Configurações", url: "/app/configuracoes", icon: Settings, module: "configuracoes" },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { orders } = useStockStore();
+  const user = useAuthStore((s) => s.getCurrentUser());
   const pendingCount = (orders || []).filter(
     (o) => o.deliveryStatus === "Entrega Incompleta",
   ).length;
+
+  const operacao = operacaoAll.filter((i) => user?.permissions[i.module]);
+  const sistema = sistemaAll.filter((i) => user?.permissions[i.module]);
+  const isAdmin = user?.kind === "admin";
 
   const linkBase =
     "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
@@ -107,6 +115,28 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {isAdmin && (
+          <SidebarGroup className="mt-4">
+            {!collapsed && (
+              <SidebarGroupLabel className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Administração
+              </SidebarGroupLabel>
+            )}
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink to="/app/funcionarios" className={linkBase} activeClassName={linkActive}>
+                      <Users className="h-4 w-4 shrink-0" />
+                      {!collapsed && <span>Funcionários</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
     </Sidebar>
   );
