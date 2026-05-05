@@ -13,23 +13,33 @@ export function RequireAuth({
 }) {
   const location = useLocation()
   
-  // Pegamos o ID para o React saber quando atualizar a tela
+  // Pegamos o usuário de forma direta e segura
   const currentUserId = useAuthStore((s) => s.currentUserId)
-  // Executamos a função fora do seletor do Zustand para evitar loops
   const getCurrentUser = useAuthStore((s) => s.getCurrentUser)
   const user = getCurrentUser()
 
-  if (!user) {
+  // 1. Se não tem usuário, manda pro login e guarda de onde ele veio
+  if (!user || !currentUserId) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
   }
+
+  // 2. Se a página é só de admin e ele não é, manda pro estoque
   if (adminOnly && user.kind !== "admin") {
     return <Navigate to="/app/estoque" replace />
   }
-  if (module && !user.permissions[module]) {
-    // First permitted module fallback
-    const order: ModuleKey[] = ["estoque", "scanner", "pedidos", "fornecedores", "historico", "etiquetas", "configuracoes"]
+
+  // 3. Se a página exige um módulo e ele não tem permissão, acha o primeiro que ele tem
+  if (module && user.kind !== "admin" && !user.permissions[module]) {
+    const order: ModuleKey[] =["estoque", "scanner", "pedidos", "fornecedores", "historico", "etiquetas", "configuracoes"]
     const fallback = order.find((m) => user.permissions[m])
-    return <Navigate to={fallback ? `/app/${fallback}` : "/login"} replace />
+    
+    // Se ele não tem permissão pra NADA, desloga e manda pro login
+    if (!fallback) {
+       return <Navigate to="/login" replace />
+    }
+    return <Navigate to={`/app/${fallback}`} replace />
   }
+
+  // Se passou por toda a segurança, exibe a tela
   return <>{children}</>
 }

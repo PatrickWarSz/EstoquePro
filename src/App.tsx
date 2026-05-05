@@ -28,26 +28,30 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-          <Route path="/" element={<Navigate to="/app/estoque" replace />} />
+            <Route path="/" element={<Navigate to="/app/estoque" replace />} />
             <Route path="/login" element={<LoginPage />} />
-            <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
-              <Route path="/app" element={<Navigate to="/app/estoque" replace />} />
-              <Route path="/app/estoque" element={<RequireAuth module="estoque"><EstoquePage /></RequireAuth>} />
-              <Route path="/app/pedidos" element={<RequireAuth module="pedidos"><PedidosPage /></RequireAuth>} />
-              <Route path="/app/fornecedores" element={<RequireAuth module="fornecedores"><FornecedoresPage /></RequireAuth>} />
-              <Route path="/app/historico" element={<RequireAuth module="historico"><HistoricoPage /></RequireAuth>} />
-              <Route path="/app/scanner" element={<RequireAuth module="scanner"><ScannerPage /></RequireAuth>} />
-              <Route path="/app/etiquetas" element={<RequireAuth module="etiquetas"><EtiquetasPage /></RequireAuth>} />
-              <Route path="/app/configuracoes" element={<RequireAuth module="configuracoes"><ConfiguracoesPage /></RequireAuth>} />
-              <Route path="/app/funcionarios" element={<RequireAuth adminOnly><FuncionariosPage /></RequireAuth>} />
-              <Route path="/app/funcionarios/:id/historico" element={<RequireAuth adminOnly><EmployeeHistoryPage /></RequireAuth>} />
-              {/* compat com URLs antigas */}
-              <Route path="/estoque" element={<Navigate to="/app/estoque" replace />} />
-              <Route path="/pedidos" element={<Navigate to="/app/pedidos" replace />} />
-              <Route path="/fornecedores" element={<Navigate to="/app/fornecedores" replace />} />
-              <Route path="/historico" element={<Navigate to="/app/historico" replace />} />
-              <Route path="/configuracoes" element={<Navigate to="/app/configuracoes" replace />} />
+            
+            {/* O AppLayout não tem mais RequireAuth bloqueando tudo, o controle é por página */}
+            <Route path="/app" element={<AppLayout />}>
+              <Route index element={<Navigate to="/app/estoque" replace />} />
+              <Route path="estoque" element={<RequireAuth module="estoque"><EstoquePage /></RequireAuth>} />
+              <Route path="pedidos" element={<RequireAuth module="pedidos"><PedidosPage /></RequireAuth>} />
+              <Route path="fornecedores" element={<RequireAuth module="fornecedores"><FornecedoresPage /></RequireAuth>} />
+              <Route path="historico" element={<RequireAuth module="historico"><HistoricoPage /></RequireAuth>} />
+              <Route path="scanner" element={<RequireAuth module="scanner"><ScannerPage /></RequireAuth>} />
+              <Route path="etiquetas" element={<RequireAuth module="etiquetas"><EtiquetasPage /></RequireAuth>} />
+              <Route path="configuracoes" element={<RequireAuth module="configuracoes"><ConfiguracoesPage /></RequireAuth>} />
+              <Route path="funcionarios" element={<RequireAuth adminOnly><FuncionariosPage /></RequireAuth>} />
+              <Route path="funcionarios/:id/historico" element={<RequireAuth adminOnly><EmployeeHistoryPage /></RequireAuth>} />
             </Route>
+
+            {/* compat com URLs antigas */}
+            <Route path="/estoque" element={<Navigate to="/app/estoque" replace />} />
+            <Route path="/pedidos" element={<Navigate to="/app/pedidos" replace />} />
+            <Route path="/fornecedores" element={<Navigate to="/app/fornecedores" replace />} />
+            <Route path="/historico" element={<Navigate to="/app/historico" replace />} />
+            <Route path="/configuracoes" element={<Navigate to="/app/configuracoes" replace />} />
+            
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
