@@ -10,7 +10,14 @@ import { toast } from "sonner"
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const { admin, currentUserId, setupAdmin, login } = useAuthStore()
+  
+  // Pegamos as funções e variáveis individualmente para o Zustand não travar
+  const admin = useAuthStore((s) => s.admin)
+  const currentUserId = useAuthStore((s) => s.currentUserId)
+  const setupAdmin = useAuthStore((s) => s.setupAdmin)
+  const login = useAuthStore((s) => s.login)
+  const getCurrentUser = useAuthStore((s) => s.getCurrentUser)
+
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
@@ -19,9 +26,16 @@ export default function LoginPage() {
 
   const isFirstSetup = !admin
 
+  // A MÁGICA ACONTECE AQUI: Agora ele só redireciona se o usuário for VÁLIDO, não apenas se tiver um ID
   useEffect(() => {
-    if (currentUserId) navigate("/app/estoque", { replace: true })
-  }, [currentUserId, navigate])
+    if (getCurrentUser()) {
+      navigate("/app/estoque", { replace: true })
+    }
+  }, [currentUserId, navigate, getCurrentUser])
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    // ... O RESTO DO SEU CÓDIGO FICA EXATAMENTE IGUAL ...
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()

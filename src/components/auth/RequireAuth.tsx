@@ -12,7 +12,12 @@ export function RequireAuth({
   adminOnly?: boolean
 }) {
   const location = useLocation()
-  const user = useAuthStore((s) => s.getCurrentUser())
+  
+  // Pegamos o ID para o React saber quando atualizar a tela
+  const currentUserId = useAuthStore((s) => s.currentUserId)
+  // Executamos a função fora do seletor do Zustand para evitar loops
+  const getCurrentUser = useAuthStore((s) => s.getCurrentUser)
+  const user = getCurrentUser()
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
