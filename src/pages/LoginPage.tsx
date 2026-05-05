@@ -1,49 +1,63 @@
 import { FormEvent, useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { Boxes, Lock, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
-import { useAuthStore } from "@/lib/auth-store"
+import { useAuthStore, ModuleKey } from "@/lib/auth-store"
 import { toast } from "sonner"
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   
-  // Pegamos as funções e variáveis individualmente para o Zustand não travar
   const admin = useAuthStore((s) => s.admin)
-  const currentUserId = useAuthStore((s) => s.currentUserId)
   const setupAdmin = useAuthStore((s) => s.setupAdmin)
   const login = useAuthStore((s) => s.login)
   const getCurrentUser = useAuthStore((s) => s.getCurrentUser)
 
   const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
+  const[password, setPassword] = useState("")
   const [name, setName] = useState("")
-  const [companyName, setCompanyName] = useState("")
+  const[companyName, setCompanyName] = useState("")
   const [loading, setLoading] = useState(false)
 
   const isFirstSetup = !admin
 
-  // A MÁGICA ACONTECE AQUI: Agora ele só redireciona se o usuário for VÁLIDO, não apenas se tiver um ID
+  // A MÁGICA CONTRA O LOOP INFINITO ACONTECE AQUI
   useEffect(() => {
-    if (getCurrentUser()) {
-      navigate("/app/estoque", { replace: true })
+    const user = getCurrentUser()
+    if (user) {
+      // Se for admin, vai direto pro estoque
+      if (user.kind === "admin") {
+        navigate("/app/estoque", { replace: true })
+        return
+      }
+      
+      // Se for funcionário, verifica qual tela ele tem permissão para abrir
+      const order: ModuleKey[] =["estoque", "scanner", "pedidos", "fornecedores", "historico", "etiquetas", "configuracoes"]
+      const fallback = order.find((m) => user.permissions[m])
+      
+      if (fallback) {
+        navigate(`/app/${fallback}`, { replace: true })
+      } else {
+        // Se ele não tem permissão para absolutamente NADA, fica na tela de login e avisa
+        toast.error("Você não tem permissão de acesso a nenhuma tela. Fale com o Administrador.")
+      }
     }
-  }, [currentUserId, navigate, getCurrentUser])
+  }, [getCurrentUser, navigate])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    // ... O RESTO DO SEU CÓDIGO FICA EXATAMENTE IGUAL ...
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
+    
     if (!username.trim() || !password) {
       toast.error("Preencha usuário e senha")
       return
     }
+    
     setLoading(true)
+    
     try {
       if (isFirstSetup) {
         if (!name.trim()) {
@@ -64,6 +78,18 @@ export default function LoginPage() {
           return
         }
         toast.success("Bem-vindo!")
+        
+        // Direciona para a tela certa na hora do login também
+        const user = getCurrentUser()
+        if (user && user.kind !== "admin") {
+           const order: ModuleKey[] =["estoque", "scanner", "pedidos", "fornecedores", "historico", "etiquetas", "configuracoes"]
+           const fallback = order.find((m) => user.permissions[m])
+           if (fallback) {
+             navigate(`/app/${fallback}`, { replace: true })
+             return
+           }
+        }
+        
         navigate("/app/estoque", { replace: true })
       }
     } finally {
