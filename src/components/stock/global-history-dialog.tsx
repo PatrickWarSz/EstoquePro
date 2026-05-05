@@ -46,6 +46,7 @@ interface HistoryEntryWithContext {
   unit: string
   note?: string
   orderId?: string
+  operatorName?: string
 }
 
 export function GlobalHistoryDialog({ open, onOpenChange }: GlobalHistoryDialogProps) {
@@ -71,6 +72,7 @@ export function GlobalHistoryDialog({ open, onOpenChange }: GlobalHistoryDialogP
             unit: item.unit,
             note: entry.note,
             orderId: entry.orderId,
+            operatorName: entry.operatorName,
           })
         })
       })
@@ -241,6 +243,11 @@ export function GlobalHistoryDialog({ open, onOpenChange }: GlobalHistoryDialogP
                         {entry.note && (
                           <p className="text-xs text-muted-foreground italic mt-0.5">
                             {entry.note}
+                          </p>
+                        )}
+                        {entry.operatorName && (
+                          <p className="text-[11px] font-medium text-muted-foreground mt-0.5">
+                            por {entry.operatorName}
                           </p>
                         )}
                         {entry.orderId && (
