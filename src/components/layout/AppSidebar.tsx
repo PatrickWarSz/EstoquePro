@@ -34,7 +34,9 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { orders } = useStockStore();
-  const user = useAuthStore((s) => s.getCurrentUser());
+  const currentUserId = useAuthStore((s) => s.currentUserId);
+  const getCurrentUser = useAuthStore((s) => s.getCurrentUser);
+  const user = getCurrentUser();
   const pendingCount = (orders || []).filter(
     (o) => o.deliveryStatus === "Entrega Incompleta",
   ).length;

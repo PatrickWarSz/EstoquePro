@@ -19,7 +19,9 @@ import { useNavigate } from "react-router-dom";
 export function TopBar() {
   const { theme, setTheme } = useTheme();
   const { categories } = useStockStore();
-  const user = useAuthStore((s) => s.getCurrentUser());
+  const currentUserId = useAuthStore((s) => s.currentUserId);
+  const getCurrentUser = useAuthStore((s) => s.getCurrentUser);
+  const user = getCurrentUser();
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
