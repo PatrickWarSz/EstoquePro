@@ -107,53 +107,68 @@ export const useStockStore = create<StockState>()(
       clientId: 'local-user',
       qrAliases: {},
 
-     // -- PUXADOR DE DADOS (SUPABASE FETCH) --
+      // -- PUXADOR DE DADOS COMPLETO (CATEGORIAS E PRODUTOS) --
       initialize: async () => {
         set({ loading: true });
         try {
           const { supabase } = await import('./supabase');
           const { useAuthStore } = await import('./auth-store');
           
-          // 1. Verificamos quem é o dono que está logando
           const user = useAuthStore.getState().getCurrentUser();
           if (!user) {
             set({ loading: false });
             return;
           }
 
-          // IMPORTANTE: Use o MESMO ID da Delicatta que você colou ontem na addCategory
           const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
 
-          // 2. Buscamos todas as categorias dessa empresa no Supabase
-          const { data: categoriasBD, error } = await supabase
+          // 1. Buscamos as CATEGORIAS
+          const { data: categoriasBD, error: catError } = await supabase
             .from('categorias')
             .select('*')
-            .eq('workspace_id', workspaceId); // Isso garante que só puxe os dados desta empresa
+            .eq('workspace_id', workspaceId);
 
-          if (error) {
-            console.error("Erro ao puxar dados do Supabase:", error);
-            set({ loading: false });
-            return;
-          }
+          if (catError) throw catError;
 
-          // 3. Traduzimos os dados do Banco para a tela do React entender
-          // O banco devolve [{ id: "1", nome: "elastico" }]
-          // A tela precisa de [{ id: "1", name: "elastico", items: [] }]
+          // 2. Buscamos os PRODUTOS
+          const { data: produtosBD, error: prodError } = await supabase
+            .from('produtos')
+            .select('*')
+            .eq('workspace_id', workspaceId);
+
+          if (prodError) throw prodError;
+
+          // 3. Juntamos os Produtos dentro de suas Categorias
           if (categoriasBD) {
-             const categoriasTraduzidas: Category[] = categoriasBD.map((cat) => ({
-                id: cat.id,
-                name: cat.nome,
-                items:[] // Temporário, deixamos vazio porque ainda não migramos os produtos
-             }));
+             const categoriasTraduzidas: Category[] = categoriasBD.map((cat) => {
+                // Filtramos os produtos que pertencem a esta categoria específica
+                const itensDestaCategoria = (produtosBD ||[])
+                  .filter(prod => prod.categoria_id === cat.id)
+                  .map(prod => ({
+                    id: prod.id,
+                    name: prod.nome,
+                    quantity: Number(prod.quantidade),
+                    minQuantity: Number(prod.estoque_minimo),
+                    unit: prod.unidade,
+                    categoryId: prod.categoria_id,
+                    supplierIds: prod.fornecedor_ids || [],
+                    history:[] // Em breve migraremos o histórico também
+                  }));
 
-             // 4. Salva no estado da tela
+                return {
+                  id: cat.id,
+                  name: cat.nome,
+                  items: itensDestaCategoria
+                };
+             });
+
+             // 4. Mandamos os dados montados para a Tela
              set({
                categories: categoriasTraduzidas,
                selectedCategoryId: categoriasTraduzidas.length > 0 ? categoriasTraduzidas[0].id : null,
                loading: false
              });
           }
-
         } catch (error) {
           console.error("Erro fatal ao inicializar o banco:", error);
           set({ loading: false });
