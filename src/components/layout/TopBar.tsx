@@ -42,10 +42,10 @@ export function TopBar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 w-full items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      <SidebarTrigger className="h-8 w-8" />
+    <header className="sticky top-0 z-40 flex h-14 w-full items-center gap-2 border-b border-border bg-background/95 px-3 sm:px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+      <SidebarTrigger className="h-9 w-9 shrink-0" />
 
-      <form onSubmit={handleSearch} className="relative flex-1 max-w-xl">
+      <form onSubmit={handleSearch} className="relative hidden sm:block flex-1 max-w-xl">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={query}
@@ -58,21 +58,29 @@ export function TopBar() {
         </kbd>
       </form>
 
-      <div className="ml-auto flex items-center gap-2">
+      {/* Mobile: brand label centered, search lives inside Estoque page */}
+      <div className="sm:hidden flex-1 truncate text-sm font-semibold tracking-tight">
+        Estoque Pro
+      </div>
+
+      <div className="ml-auto flex items-center gap-1 sm:gap-2">
         {lowOrZero > 0 && (
           <button
             onClick={() => navigate("/estoque")}
-            className="flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-xs font-medium text-warning hover:bg-warning/20 transition-colors"
+            className="flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 sm:px-3 py-1 text-xs font-medium text-warning hover:bg-warning/20 transition-colors"
+            aria-label={`${lowOrZero} alertas`}
           >
             <AlertTriangle className="h-3.5 w-3.5" />
-            {lowOrZero} {lowOrZero === 1 ? "alerta" : "alertas"}
+            <span>{lowOrZero}</span>
+            <span className="hidden sm:inline">{lowOrZero === 1 ? "alerta" : "alertas"}</span>
           </button>
         )}
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="h-9 w-9"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          aria-label="Alternar tema"
         >
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
