@@ -80,12 +80,17 @@ interface AuthState {
   currentUserId: string | null 
   workspaceId: string | null 
 
-  setupAdmin: (input: { username: string; password: string; name: string; companyName?: string }) => Promise<void>
+  // 👇 ATUALIZADO: Adicionamos o documentId aqui
+  setupAdmin: (input: { username: string; password: string; name: string; companyName?: string; documentId: string }) => Promise<void>
+  
   login: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>
   logout: () => void
 
   addEmployee: (input: { username: string; password: string; name: string; permissions: Permissions }) => Promise<{ ok: boolean; id?: string; error?: string }>
-  updateEmployee: (id: string, updates: Partial<Pick<Employee, "name" | "permissions" | "active">>) => void
+  
+  // 👇 ATUALIZADO: Adicionamos o "passwordHash" na lista de coisas que podem ser atualizadas
+  updateEmployee: (id: string, updates: Partial<Pick<Employee, "name" | "permissions" | "active" | "passwordHash">>) => void
+  
   resetEmployeePassword: (id: string, newPassword: string) => Promise<void>
   removeEmployee: (id: string) => void
 
@@ -100,24 +105,34 @@ export const useAuthStore = create<AuthState>()(
       currentUserId: null,
       workspaceId: null, 
 
-      // -- CRIAR EMPRESA E DONO (SUPABASE) --
-      setupAdmin: async ({ username, password, name, companyName }) => {
+     // -- CRIAR EMPRESA E DONO (SUPABASE) --
+      // Adicionamos o campo 'documentId' (CPF/CNPJ) na chamada
+      setupAdmin: async ({ username, password, name, companyName, documentId }) => {
         const { supabase } = await import('./supabase');
         const passwordHash = await hashPassword(password);
-        const cnpjCpfTemporario = username.trim().toLowerCase() + "_cpf"; 
+        
+        // Remove pontuações do CPF/CNPJ para salvar limpo no banco
+        const cleanDocument = documentId ? documentId.replace(/\D/g, '') : (username.trim().toLowerCase() + "_cpf");
 
         try {
+          // 1. Cria a Empresa (Workspace) com o Documento Real
           const { data: workspaceData, error: workError } = await supabase
             .from('workspaces')
             .insert([{ 
-              cnpj_cpf: cnpjCpfTemporario, 
+              cnpj_cpf: cleanDocument, 
               nome_empresa: companyName || "Minha Empresa" 
             }])
             .select()
             .single();
 
-          if (workError) throw workError;
+          if (workError) {
+             if (workError.code === '23505') { // Erro de UNIQUE (Documento já existe)
+                throw new Error("Este CPF/CNPJ já possui uma conta. Faça login.");
+             }
+             throw workError;
+          }
 
+          // 2. Cria o Usuário Dono (Admin)
           const { error: userError } = await supabase
             .from('usuarios')
             .insert([{
@@ -127,20 +142,21 @@ export const useAuthStore = create<AuthState>()(
               tipo: 'admin',
               permissoes: fullPermissions(),
               ativo: true,
-              senha_hash: passwordHash // <-- A senha do Dono salva e protegida
+              senha_hash: passwordHash
             }]);
 
           if (userError) throw userError;
 
+          // 3. Salva no local
           set({
             admin: { username: username.trim().toLowerCase(), passwordHash, name: name.trim(), companyName },
             currentUserId: "admin",
             workspaceId: workspaceData.id 
           });
 
-        } catch (error) {
+        } catch (error: any) {
           console.error("Erro ao criar ambiente:", error);
-          throw error;
+          throw error; // Repassa o erro para a tela exibir o Toast
         }
       },
 
