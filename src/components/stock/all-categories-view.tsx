@@ -285,11 +285,12 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                                 <td className="px-4 py-2.5 text-right">
                                   {getStatusBadge(status)}
                                 </td>
-                                <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                                <td className="px-3 sm:px-4 py-2.5 text-right whitespace-nowrap">
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-7 w-7 text-success hover:bg-success/10 hover:text-success"
+                                    aria-label="Entrada"
+                                    className="h-9 w-9 sm:h-7 sm:w-7 text-success hover:bg-success/10 hover:text-success"
                                     onClick={() =>
                                       setMovementDialog({ item, categoryId: cat.id, type: "entrada" })
                                     }
@@ -299,7 +300,8 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                    aria-label="Saída"
+                                    className="h-9 w-9 sm:h-7 sm:w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
                                     onClick={() =>
                                       setMovementDialog({ item, categoryId: cat.id, type: "saida" })
                                     }
