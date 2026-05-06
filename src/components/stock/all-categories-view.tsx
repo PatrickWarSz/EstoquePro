@@ -192,25 +192,25 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                 {/* Category header */}
                 <button
                   onClick={() => toggleCollapse(cat.id)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/40 transition-colors"
+                  className="flex w-full items-center gap-2 px-3 py-3 sm:gap-3 sm:px-4 text-left hover:bg-muted/40 transition-colors"
                 >
                   {isCollapsed ? (
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   ) : (
                     <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
                   )}
-                  <span className="flex-1 font-semibold text-sm tracking-wide uppercase text-muted-foreground">
+                  <span className="min-w-0 flex-1 truncate font-semibold text-xs sm:text-sm tracking-wide uppercase text-muted-foreground">
                     {cat.name}
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                     {zeroCount > 0 && (
-                      <span className="text-xs text-destructive font-medium">{zeroCount} zerado</span>
+                      <span className="text-[10px] sm:text-xs text-destructive font-medium">{zeroCount} zerado</span>
                     )}
                     {lowCount > 0 && (
-                      <span className="text-xs text-warning font-medium">{lowCount} baixo</span>
+                      <span className="text-[10px] sm:text-xs text-warning font-medium">{lowCount} baixo</span>
                     )}
-                    <span className="text-xs text-muted-foreground">
-                      {cat.items.length} iten{cat.items.length !== 1 ? "s" : ""}
+                    <span className="text-[10px] sm:text-xs text-muted-foreground">
+                      {cat.items.length}
                     </span>
                   </div>
                 </button>
