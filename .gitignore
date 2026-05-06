@@ -24,3 +24,14 @@ dist-ssr
 *.sw?
 
 .env
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Lovable / sandbox internals
+.lovable/
+.workspace/
+
+# Lockfile duplicates (we use bun.lock)
+bun.lockb
+package-lock.json
