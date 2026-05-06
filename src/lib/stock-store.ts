@@ -183,18 +183,53 @@ export const useStockStore = create<StockState>()(
       },
 
       // ── Categories ────────────────────────────────────────────
+      // -- CATEGORIAS (MIGRAÇÃO PARA SUPABASE) --
       addCategory: async (category) => {
-        const newCategory: Category = {
-          ...category,
-          id: generateId(),
-          items: []
+        const { supabase } = await import('./supabase');
+        // Importamos o outro cérebro (Auth) para buscar o usuário
+        const { useAuthStore } = await import('./auth-store');
+        
+        // 1. Buscamos o usuário logado de forma correta (via getState)
+        const user = useAuthStore.getState().getCurrentUser();
+        
+        if (!user) {
+          console.error("Erro: Usuário não identificado para salvar categoria.");
+          return;
         }
-        set((state) => ({
-          categories: [...state.categories, newCategory],
-          selectedCategoryId: state.selectedCategoryId || newCategory.id,
-        }))
-      },
 
+        // 2. Enviamos para a tabela 'categorias' no Supabase
+        // IMPORTANTE: Substitua o ID abaixo pelo ID que você copiou do Supabase!
+        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+
+        const { data, error } = await supabase
+          .from('categorias')
+          .insert([
+            { 
+              nome: category.name,
+              workspace_id: workspaceId 
+            }
+          ])
+          .select();
+
+        if (error) {
+          console.error("Erro ao salvar no Supabase:", error.message);
+          return;
+        }
+
+        // 3. Se o banco salvou, agora atualizamos a tela para o usuário ver
+        if (data && data[0]) {
+          const newCategory: Category = {
+            id: data[0].id,
+            name: data[0].nome,
+            items: []
+          };
+
+          set((state) => ({
+            categories: [...state.categories, newCategory],
+            selectedCategoryId: state.selectedCategoryId || newCategory.id,
+          }));
+        }
+      },
       updateCategory: async (categoryId, name) => {
         set((state) => ({
           categories: state.categories.map((cat) =>
