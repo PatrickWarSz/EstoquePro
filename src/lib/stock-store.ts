@@ -89,7 +89,7 @@ export interface StockState {
 export const useStockStore = create<StockState>()(
   persist(
     (set, get) => ({
-      categories: [],
+      categories:[],
       selectedCategoryId: null,
       suppliers:[],
       orders: [],
@@ -108,7 +108,7 @@ export const useStockStore = create<StockState>()(
           const user = useAuthStore.getState().getCurrentUser();
           if (!user) { set({ loading: false }); return; }
 
-          const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+          const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
 
           // Puxando TODAS as tabelas
           const[catRes, prodRes, movRes, supRes, locRes, pedRes, entRes, qrRes] = await Promise.all([
@@ -128,7 +128,7 @@ export const useStockStore = create<StockState>()(
 
           // Montando QR Codes
           const qrAliases: Record<string, QrAlias> = {};
-          (qrRes.data || []).forEach(qr => {
+          (qrRes.data ||[]).forEach(qr => {
             if (qr.tipo === 'item') qrAliases[qr.chave] = { kind: 'item', categoryId: qr.categoria_id, itemId: qr.item_id };
             else if (qr.tipo === 'location') qrAliases[qr.chave] = { kind: 'location', locationId: qr.location_id };
           });
@@ -181,7 +181,7 @@ export const useStockStore = create<StockState>()(
       // -- PRODUTOS --
       addItem: async (categoryId, item) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const { data, error } = await supabase.from('produtos').insert([{ 
               nome: item.name, quantidade: item.quantity, estoque_minimo: item.minQuantity || 0,
               unidade: item.unit || 'un', categoria_id: categoryId, workspace_id: workspaceId 
@@ -194,13 +194,13 @@ export const useStockStore = create<StockState>()(
       },
       removeItem: async (categoryId, itemId) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const { error } = await supabase.from('produtos').delete().eq('id', itemId).eq('workspace_id', workspaceId);
         if (!error) set((state) => ({ categories: state.categories.map((cat) => cat.id === categoryId ? { ...cat, items: cat.items.filter((i) => i.id !== itemId) } : cat) }));
       },
       updateItem: async (categoryId, itemId, updates) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const dbUpdates: any = {};
         if (updates.name !== undefined) dbUpdates.nome = updates.name;
         if (updates.minQuantity !== undefined) dbUpdates.estoque_minimo = updates.minQuantity;
@@ -212,7 +212,7 @@ export const useStockStore = create<StockState>()(
       },
       updateItemQuantity: async (categoryId, itemId, newQuantity, type, movementQty, note, orderId) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const op = getCurrentOperator();
         const { error: errorProduto } = await supabase.from('produtos').update({ quantidade: newQuantity }).eq('id', itemId).eq('workspace_id', workspaceId); 
         if (errorProduto) return;
@@ -230,7 +230,7 @@ export const useStockStore = create<StockState>()(
       // -- CATEGORIAS --
       addCategory: async (category) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const { data, error } = await supabase.from('categorias').insert([{ nome: category.name, workspace_id: workspaceId }]).select();
         if (!error && data && data[0]) {
           const newCategory: Category = { id: data[0].id, name: data[0].nome, items:[] };
@@ -239,13 +239,13 @@ export const useStockStore = create<StockState>()(
       },
       updateCategory: async (categoryId, name) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const { error } = await supabase.from('categorias').update({ nome: name }).eq('id', categoryId).eq('workspace_id', workspaceId);
         if (!error) set((state) => ({ categories: state.categories.map((cat) => cat.id === categoryId ? { ...cat, name } : cat ) }));
       },
       removeCategory: async (categoryId) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const { error } = await supabase.from('categorias').delete().eq('id', categoryId).eq('workspace_id', workspaceId);
         if (!error) {
           set((state) => {
@@ -260,7 +260,7 @@ export const useStockStore = create<StockState>()(
       // -- FORNECEDORES (SUPABASE) --
       addSupplier: async (supplier) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const { data, error } = await supabase.from('fornecedores').insert([{ workspace_id: workspaceId, nome: supplier.name, contato: supplier.contact, telefone: supplier.phone, email: supplier.email, endereco: supplier.address }]).select();
         if (!error && data && data[0]) {
           const newSupplier: Supplier = { id: data[0].id, name: data[0].nome, contact: data[0].contato || '', phone: data[0].telefone || '', email: data[0].email || '', address: data[0].endereco || '' };
@@ -269,7 +269,7 @@ export const useStockStore = create<StockState>()(
       },
       updateSupplier: async (supplierId, updates) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const dbUpdates: any = {};
         if (updates.name !== undefined) dbUpdates.nome = updates.name;
         if (updates.contact !== undefined) dbUpdates.contato = updates.contact;
@@ -281,7 +281,7 @@ export const useStockStore = create<StockState>()(
       },
       removeSupplier: async (supplierId) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const { error } = await supabase.from('fornecedores').delete().eq('id', supplierId).eq('workspace_id', workspaceId);
         if (!error) set((state) => ({ suppliers: state.suppliers.filter((s) => s.id !== supplierId) }));
       },
@@ -289,7 +289,7 @@ export const useStockStore = create<StockState>()(
       // -- LOCAIS DE ESTOQUE (SUPABASE) --
       addLocation: async (location) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const itemRefsString = JSON.stringify(location.itemRefs ||[]);
         const { data, error } = await supabase.from('locais_estoque').insert([{ workspace_id: workspaceId, nome: location.name, descricao: location.description, item_refs: itemRefsString }]).select();
         if (!error && data && data[0]) {
@@ -301,7 +301,7 @@ export const useStockStore = create<StockState>()(
       },
       updateLocation: async (locationId, updates) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const dbUpdates: any = {};
         if (updates.name !== undefined) dbUpdates.nome = updates.name;
         if (updates.description !== undefined) dbUpdates.descricao = updates.description;
@@ -311,7 +311,7 @@ export const useStockStore = create<StockState>()(
       },
       removeLocation: async (locationId) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const { error } = await supabase.from('locais_estoque').delete().eq('id', locationId).eq('workspace_id', workspaceId);
         if (!error) set((state) => ({ locations: state.locations.filter((l) => l.id !== locationId) }));
       },
@@ -322,7 +322,7 @@ export const useStockStore = create<StockState>()(
         const newRefs = has ? loc.itemRefs.filter(r => r !== ref) : [...loc.itemRefs, ref];
         
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const { error } = await supabase.from('locais_estoque').update({ item_refs: JSON.stringify(newRefs) }).eq('id', locationId).eq('workspace_id', workspaceId);
         if (!error) set((state) => ({ locations: state.locations.map((l) => (l.id === locationId ? { ...l, itemRefs: newRefs } : l)) }));
       },
@@ -330,7 +330,7 @@ export const useStockStore = create<StockState>()(
       // -- PEDIDOS (MIGRAÇÃO SUPABASE) --
       addOrder: async (order) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         
         const { data, error } = await supabase.from('pedidos').insert([{ 
           workspace_id: workspaceId, fornecedor_id: order.supplierId, produto_id: order.linkedItemId || null,
@@ -346,7 +346,7 @@ export const useStockStore = create<StockState>()(
 
       updateOrder: async (orderId, updates) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const dbUp: any = {};
         if (updates.expectedDate !== undefined) dbUp.data_esperada = updates.expectedDate;
         if (updates.notes !== undefined) dbUp.observacoes = updates.notes;
@@ -357,14 +357,14 @@ export const useStockStore = create<StockState>()(
 
       removeOrder: async (orderId) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const { error } = await supabase.from('pedidos').delete().eq('id', orderId).eq('workspace_id', workspaceId);
         if (!error) set((state) => ({ orders: state.orders.filter((o) => o.id !== orderId) }));
       },
 
       registerDelivery: async ({ orderId, deliveryDate, quantityDelivered, stockEntryQuantity, notes, createStockEntry }) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const state = get();
         const order = state.orders.find((o) => o.id === orderId);
         if (!order) return;
@@ -387,7 +387,6 @@ export const useStockStore = create<StockState>()(
           entrada_estoque_criada: createStockEntry ? true : order.stockEntryCreated
         }).eq('id', orderId).eq('workspace_id', workspaceId);
 
-        // Se pediu pra dar entrada no estoque, chama a função que já temos pronta
         if (createStockEntry && order.linkedCategoryId && order.linkedItemId && stockEntryQuantity && stockEntryQuantity > 0) {
            const currentItem = state.categories.find(c => c.id === order.linkedCategoryId)?.items.find(i => i.id === order.linkedItemId);
            if (currentItem) {
@@ -396,14 +395,14 @@ export const useStockStore = create<StockState>()(
               await state.updateItemQuantity(order.linkedCategoryId, order.linkedItemId, newQty, 'entrada', stockEntryQuantity, msg, orderId);
            }
         }
-        await state.initialize(); // Puxa tudo limpo do banco para atualizar a tela
+        await state.initialize(); 
       },
 
-      updateDelivery: async () => { /* Em SaaS complexo, a edição de entrega é bloqueada. O usuário deleta e faz de novo. */ },
+      updateDelivery: async () => { /* Bloqueado no SaaS */ },
 
       finalizeOrder: async (orderId) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const { error } = await supabase.from('pedidos').update({ status_entrega: 'Entrega Completa' }).eq('id', orderId).eq('workspace_id', workspaceId);
         if (!error) set((state) => ({ orders: state.orders.map((o) => o.id === orderId ? { ...o, deliveryStatus: 'Entrega Completa' } : o ) }));
       },
@@ -411,7 +410,7 @@ export const useStockStore = create<StockState>()(
       // -- ETIQUETAS QR (SUPABASE) --
       setQrAlias: async (key, alias) => {
         const { supabase } = await import('./supabase');
-        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
         const catId = alias.kind === 'item' ? alias.categoryId : null;
         const itId = alias.kind === 'item' ? alias.itemId : null;
         const locId = alias.kind === 'location' ? alias.locationId : null;
@@ -422,7 +421,8 @@ export const useStockStore = create<StockState>()(
 
       removeQrAlias: async (key) => {
         const { supabase } = await import('./supabase');
-        await supabase.from('aliases_qr').delete().eq('chave', key).eq('workspace_id', "0356ee6f-c655-4ae8-ad91-ff82703e07e9");
+        const workspaceId = useAuthStore.getState().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        await supabase.from('aliases_qr').delete().eq('chave', key).eq('workspace_id', workspaceId);
         set((state) => { const next = { ...state.qrAliases }; delete next[key]; return { qrAliases: next }; });
       },
     }),
