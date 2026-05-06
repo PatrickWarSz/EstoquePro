@@ -47,7 +47,7 @@ export default function EstoquePage() {
         </div>
         <div className="-mx-1 flex flex-nowrap gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible">
           <Button variant="outline" size="sm" onClick={() => setGlobalHistoryOpen(true)} className="shrink-0 gap-2">
-            <History className="h-4 w-4" /><span className="hidden xs:inline sm:inline">Histórico</span>
+            <History className="h-4 w-4" /><span>Histórico</span>
           </Button>
           <Button variant="outline" size="sm" onClick={() => setCategoryEditorOpen(true)} className="shrink-0 gap-2">
             <Settings className="h-4 w-4" /><span>Categorias</span>
