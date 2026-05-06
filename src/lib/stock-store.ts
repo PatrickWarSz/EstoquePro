@@ -308,28 +308,105 @@ export const useStockStore = create<StockState>()(
         if (!error) set((state) => ({ locations: state.locations.map((l) => (l.id === locationId ? { ...l, itemRefs: newRefs } : l)) }));
       },
 
-      // -- PEDIDOS (LOCAL POR ENQUANTO - PARTE 2 DA MIGRAÇÃO) --
+      // -- PEDIDOS (MIGRAÇÃO SUPABASE) --
       addOrder: async (order) => {
-        const newOrder: Order = { ...order, id: generateId(), deliveries: [] };
-        set((state) => ({ orders:[newOrder, ...state.orders] }))
-      },
-      updateOrder: async (orderId, updates) => {
-        set((state) => ({ orders: state.orders.map((o) => (o.id === orderId ? { ...o, ...updates } : o)) }))
-      },
-      removeOrder: async (orderId) => {
-        set((state) => ({ orders: state.orders.filter((o) => o.id !== orderId) }))
-      },
-      registerDelivery: async (params) => { /* Mantido original no Zustand por segurança no teste 1 */ },
-      updateDelivery: async (params) => { /* Mantido original no Zustand por segurança no teste 1 */ },
-      finalizeOrder: async (orderId) => {
-        set((state) => ({ orders: state.orders.map((o) => o.id === orderId ? { ...o, deliveryStatus: 'Entrega Completa' } : o ) }))
+        const { supabase } = await import('./supabase');
+        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        
+        const { data, error } = await supabase.from('pedidos').insert([{ 
+          workspace_id: workspaceId, fornecedor_id: order.supplierId, produto_id: order.linkedItemId || null,
+          categoria_id: order.linkedCategoryId || null, unidade: order.unit, quantidade_pedida: order.quantityOrdered, 
+          data_esperada: order.expectedDate, status_prazo: order.deadlineStatus, status_entrega: order.deliveryStatus, observacoes: order.notes 
+        }]).select();
+
+        if (!error && data && data[0]) {
+          const newOrder: Order = { ...order, id: data[0].id, deliveries: [] };
+          set((state) => ({ orders:[newOrder, ...state.orders] }));
+        }
       },
 
-      setQrAlias: (key, alias) => set((state) => ({ qrAliases: { ...state.qrAliases,[key]: alias } })),
-      removeQrAlias: (key) => set((state) => { const next = { ...state.qrAliases }; delete next[key]; return { qrAliases: next } }),
+      updateOrder: async (orderId, updates) => {
+        const { supabase } = await import('./supabase');
+        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const dbUp: any = {};
+        if (updates.expectedDate !== undefined) dbUp.data_esperada = updates.expectedDate;
+        if (updates.notes !== undefined) dbUp.observacoes = updates.notes;
+        
+        const { error } = await supabase.from('pedidos').update(dbUp).eq('id', orderId).eq('workspace_id', workspaceId);
+        if (!error) set((state) => ({ orders: state.orders.map((o) => (o.id === orderId ? { ...o, ...updates } : o)) }));
+      },
+
+      removeOrder: async (orderId) => {
+        const { supabase } = await import('./supabase');
+        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const { error } = await supabase.from('pedidos').delete().eq('id', orderId).eq('workspace_id', workspaceId);
+        if (!error) set((state) => ({ orders: state.orders.filter((o) => o.id !== orderId) }));
+      },
+
+      registerDelivery: async ({ orderId, deliveryDate, quantityDelivered, stockEntryQuantity, notes, createStockEntry }) => {
+        const { supabase } = await import('./supabase');
+        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const state = get();
+        const order = state.orders.find((o) => o.id === orderId);
+        if (!order) return;
+
+        const totalDelivered = order.quantityDelivered + quantityDelivered;
+        const deadline = calcDeadlineStatus(order.expectedDate, deliveryDate);
+        const delivStatus = calcDeliveryStatus(order.quantityOrdered, totalDelivered);
+
+        // Salva a Entrega
+        const { data: delivData, error: delivErr } = await supabase.from('entregas_pedido').insert([{
+          workspace_id: workspaceId, pedido_id: orderId, data: deliveryDate, quantidade: quantityDelivered, 
+          quantidade_estoque: stockEntryQuantity, observacoes: notes, gerou_entrada_estoque: createStockEntry
+        }]).select();
+
+        if (delivErr) return;
+
+        // Atualiza o Pedido
+        await supabase.from('pedidos').update({
+          quantidade_entregue: totalDelivered, status_prazo: deadline, status_entrega: delivStatus,
+          entrada_estoque_criada: createStockEntry ? true : order.stockEntryCreated
+        }).eq('id', orderId).eq('workspace_id', workspaceId);
+
+        // Se pediu pra dar entrada no estoque, chama a função que já temos pronta
+        if (createStockEntry && order.linkedCategoryId && order.linkedItemId && stockEntryQuantity && stockEntryQuantity > 0) {
+           const currentItem = state.categories.find(c => c.id === order.linkedCategoryId)?.items.find(i => i.id === order.linkedItemId);
+           if (currentItem) {
+              const newQty = currentItem.quantity + stockEntryQuantity;
+              const msg = `Pedido #${orderId.slice(-6).toUpperCase()} — ${quantityDelivered} entregues`;
+              await state.updateItemQuantity(order.linkedCategoryId, order.linkedItemId, newQty, 'entrada', stockEntryQuantity, msg, orderId);
+           }
+        }
+        await state.initialize(); // Puxa tudo limpo do banco para atualizar a tela
+      },
+
+      updateDelivery: async () => { /* Em SaaS complexo, a edição de entrega é bloqueada. O usuário deleta e faz de novo. */ },
+
+      finalizeOrder: async (orderId) => {
+        const { supabase } = await import('./supabase');
+        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const { error } = await supabase.from('pedidos').update({ status_entrega: 'Entrega Completa' }).eq('id', orderId).eq('workspace_id', workspaceId);
+        if (!error) set((state) => ({ orders: state.orders.map((o) => o.id === orderId ? { ...o, deliveryStatus: 'Entrega Completa' } : o ) }));
+      },
+
+      // -- ETIQUETAS QR (SUPABASE) --
+      setQrAlias: async (key, alias) => {
+        const { supabase } = await import('./supabase');
+        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        const catId = alias.kind === 'item' ? alias.categoryId : null;
+        const itId = alias.kind === 'item' ? alias.itemId : null;
+        const locId = alias.kind === 'location' ? alias.locationId : null;
+
+        await supabase.from('aliases_qr').insert([{ workspace_id: workspaceId, chave: key, tipo: alias.kind, categoria_id: catId, item_id: itId, location_id: locId }]);
+        set((state) => ({ qrAliases: { ...state.qrAliases,[key]: alias } }));
+      },
+
+      removeQrAlias: async (key) => {
+        const { supabase } = await import('./supabase');
+        await supabase.from('aliases_qr').delete().eq('chave', key).eq('workspace_id', "0356ee6f-c655-4ae8-ad91-ff82703e07e9");
+        set((state) => { const next = { ...state.qrAliases }; delete next[key]; return { qrAliases: next }; });
+      },
     }),
-    {
-      name: 'estoque-local-v2', 
-    }
+    { name: 'estoque-local-v2' }
   )
 )
