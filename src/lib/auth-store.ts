@@ -78,7 +78,7 @@ interface AuthState {
   admin: AdminAccount | null
   employees: Employee[]
   currentUserId: string | null 
-  workspaceId: string | null // AQUI ESTÁ A VARIÁVEL QUE ADICIONAMOS!
+  workspaceId: string | null 
 
   setupAdmin: (input: { username: string; password: string; name: string; companyName?: string }) => Promise<void>
   login: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>
@@ -96,9 +96,9 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       admin: null,
-      employees:[], // O SEU ESTAVA SEM ESSE COLCHETE AQUI E QUEBROU O ARQUIVO!
+      employees:[], 
       currentUserId: null,
-      workspaceId: null, // AQUI ESTÁ O VALOR INICIAL!
+      workspaceId: null, 
 
       // -- CRIAR EMPRESA E DONO (SUPABASE) --
       setupAdmin: async ({ username, password, name, companyName }) => {
@@ -107,7 +107,6 @@ export const useAuthStore = create<AuthState>()(
         const cnpjCpfTemporario = username.trim().toLowerCase() + "_cpf"; 
 
         try {
-          // 1. Cria a Empresa (Workspace)
           const { data: workspaceData, error: workError } = await supabase
             .from('workspaces')
             .insert([{ 
@@ -119,7 +118,6 @@ export const useAuthStore = create<AuthState>()(
 
           if (workError) throw workError;
 
-          // 2. Cria o Usuário Dono (Admin)
           const { error: userError } = await supabase
             .from('usuarios')
             .insert([{
@@ -128,12 +126,12 @@ export const useAuthStore = create<AuthState>()(
               username: username.trim().toLowerCase(),
               tipo: 'admin',
               permissoes: fullPermissions(),
-              ativo: true
+              ativo: true,
+              senha_hash: passwordHash // <-- A senha do Dono salva e protegida
             }]);
 
           if (userError) throw userError;
 
-          // 3. Salva no local apenas para a tela manter a sessão logada
           set({
             admin: { username: username.trim().toLowerCase(), passwordHash, name: name.trim(), companyName },
             currentUserId: "admin",
@@ -165,44 +163,84 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => set({ currentUserId: null }),
 
+      // -- FUNCIONÁRIOS COM SALVAMENTO CORRIGIDO (SUPABASE) --
       addEmployee: async ({ username, password, name, permissions }) => {
-        const u = username.trim().toLowerCase()
-        if (!u || !password || !name.trim()) return { ok: false, error: "Preencha todos os campos" }
-        const { admin, employees } = get()
-        if (admin?.username === u) return { ok: false, error: "Usuário já existe" }
-        if (employees.some((e) => e.username === u)) return { ok: false, error: "Usuário já existe" }
-        const passwordHash = await hashPassword(password)
+        const u = username.trim().toLowerCase();
+        if (!u || !password || !name.trim()) return { ok: false, error: "Preencha todos os campos" };
+        
+        const { admin, employees, workspaceId } = get();
+        if (admin?.username === u) return { ok: false, error: "Usuário já existe" };
+        if (employees.some((e) => e.username === u)) return { ok: false, error: "Usuário já existe" };
+        
+        const passwordHash = await hashPassword(password);
+        const { supabase } = await import('./supabase');
+
+        const { data, error } = await supabase.from('usuarios').insert([{
+           workspace_id: workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9",
+           nome: name.trim(),
+           username: u,
+           tipo: 'funcionario',
+           permissoes: permissions,
+           ativo: true,
+           senha_hash: passwordHash // <-- A senha do Funcionário salva com sucesso!
+        }]).select();
+
+        if (error || !data) return { ok: false, error: "Erro ao salvar funcionário no banco." };
+
         const emp: Employee = {
-          id: id(),
+          id: data[0].id,
           username: u,
           passwordHash,
           name: name.trim(),
           permissions,
           active: true,
-          createdAt: new Date().toISOString(),
-        }
-        set({ employees: [...employees, emp] })
-        return { ok: true, id: emp.id }
+          createdAt: data[0].criado_em,
+        };
+        
+        set({ employees: [...employees, emp] });
+        return { ok: true, id: emp.id };
       },
 
-      updateEmployee: (empId, updates) => {
+      updateEmployee: async (empId, updates) => {
+        const { supabase } = await import('./supabase');
+        const workspaceId = get().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        
+        const dbUpdates: any = {};
+        if (updates.name !== undefined) dbUpdates.nome = updates.name;
+        if (updates.permissions !== undefined) dbUpdates.permissoes = updates.permissions;
+        if (updates.active !== undefined) dbUpdates.ativo = updates.active;
+        if (updates.passwordHash !== undefined) dbUpdates.senha_hash = updates.passwordHash;
+
+        await supabase.from('usuarios').update(dbUpdates).eq('id', empId).eq('workspace_id', workspaceId);
+
         set((s) => ({
           employees: s.employees.map((e) => (e.id === empId ? { ...e, ...updates } : e)),
-        }))
+        }));
       },
 
       resetEmployeePassword: async (empId, newPassword) => {
         const passwordHash = await hashPassword(newPassword)
+        const { supabase } = await import('./supabase');
+        const workspaceId = get().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+        
+        // Atualiza a senha no banco de dados também!
+        await supabase.from('usuarios').update({ senha_hash: passwordHash }).eq('id', empId).eq('workspace_id', workspaceId);
+
         set((s) => ({
           employees: s.employees.map((e) => (e.id === empId ? { ...e, passwordHash } : e)),
         }))
       },
 
-      removeEmployee: (empId) => {
+      removeEmployee: async (empId) => {
+        const { supabase } = await import('./supabase');
+        const workspaceId = get().workspaceId || "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+
+        await supabase.from('usuarios').delete().eq('id', empId).eq('workspace_id', workspaceId);
+
         set((s) => ({
           employees: s.employees.filter((e) => e.id !== empId),
           currentUserId: s.currentUserId === empId ? null : s.currentUserId,
-        }))
+        }));
       },
 
       getCurrentUser: () => {
