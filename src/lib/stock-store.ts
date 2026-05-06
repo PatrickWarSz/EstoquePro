@@ -163,18 +163,51 @@ export const useStockStore = create<StockState>()(
       setSelectedCategory: (id) => set({ selectedCategoryId: id }),
 
       // ── Items ─────────────────────────────────────────────────
+      // -- PRODUTOS (MIGRAÇÃO PARA SUPABASE) --
       addItem: async (categoryId, item) => {
-        const newItem: StockItem = {
-          ...item,
-          id: generateId(),
-          history: [],
-          supplierIds: item.supplierIds || []
+        const { supabase } = await import('./supabase');
+        const { useAuthStore } = await import('./auth-store');
+        
+        const user = useAuthStore.getState().getCurrentUser();
+        if (!user) return;
+
+        const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+
+        // 1. Enviamos o produto para a tabela 'produtos'
+        const { data, error } = await supabase
+          .from('produtos')
+          .insert([
+            { 
+              nome: item.name,
+              quantidade: item.quantity,
+              estoque_minimo: item.minQuantity || 0,
+              unidade: item.unit || 'un',
+              categoria_id: categoryId,
+              workspace_id: workspaceId 
+            }
+          ])
+          .select();
+
+        if (error) {
+          console.error("Erro ao salvar produto:", error.message);
+          return;
         }
-        set((state) => ({
-          categories: state.categories.map((cat) =>
-            cat.id === categoryId ? { ...cat, items: [...cat.items, newItem] } : cat
-          ),
-        }))
+
+        // 2. Se salvou no banco, atualizamos a tela
+        if (data && data[0]) {
+          const newItem: StockItem = {
+            ...item,
+            id: data[0].id,
+            history:[],
+            supplierIds: item.supplierIds ||[]
+          };
+
+          set((state) => ({
+            categories: state.categories.map((cat) =>
+              cat.id === categoryId ? { ...cat, items: [...cat.items, newItem] } : cat
+            ),
+          }));
+        }
       },
 
       removeItem: async (categoryId, itemId) => {
