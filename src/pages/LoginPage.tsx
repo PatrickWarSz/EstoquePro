@@ -8,9 +8,57 @@ import { Card } from "@/components/ui/card"
 import { useAuthStore, ModuleKey } from "@/lib/auth-store"
 import { toast } from "sonner"
 
+// --- FUNÇÃO MATEMÁTICA DE VALIDAÇÃO (CPF E CNPJ) ---
+function isValidDocument(doc: string) {
+  const digits = doc.replace(/\D/g, "");
+  
+  // Validação de CPF (11 dígitos)
+  if (digits.length === 11) {
+    if (/^(\d)\1+$/.test(digits)) return false; // Impede 111.111...
+    let sum = 0, rev;
+    for (let i = 0; i < 9; i++) sum += parseInt(digits.charAt(i)) * (10 - i);
+    rev = 11 - (sum % 11);
+    if (rev === 10 || rev === 11) rev = 0;
+    if (rev !== parseInt(digits.charAt(9))) return false;
+    sum = 0;
+    for (let i = 0; i < 10; i++) sum += parseInt(digits.charAt(i)) * (11 - i);
+    rev = 11 - (sum % 11);
+    if (rev === 10 || rev === 11) rev = 0;
+    if (rev !== parseInt(digits.charAt(10))) return false;
+    return true;
+  }
+
+  // Validação de CNPJ (14 dígitos)
+  if (digits.length === 14) {
+    if (/^(\d)\1+$/.test(digits)) return false;
+    let size = digits.length - 2;
+    let nums = digits.substring(0, size);
+    const dig = digits.substring(size);
+    let sum = 0, pos = size - 7;
+    for (let i = size; i >= 1; i--) {
+      sum += parseInt(nums.charAt(size - i)) * pos--;
+      if (pos < 2) pos = 9;
+    }
+    let result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+    if (result !== parseInt(dig.charAt(0))) return false;
+    size = size + 1;
+    nums = digits.substring(0, size);
+    sum = 0;
+    pos = size - 7;
+    for (let i = size; i >= 1; i--) {
+      sum += parseInt(nums.charAt(size - i)) * pos--;
+      if (pos < 2) pos = 9;
+    }
+    result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+    if (result !== parseInt(dig.charAt(1))) return false;
+    return true;
+  }
+
+  return false;
+}
+
 export default function LoginPage() {
   const navigate = useNavigate()
-  
   const admin = useAuthStore((s) => s.admin)
   const setupAdmin = useAuthStore((s) => s.setupAdmin)
   const login = useAuthStore((s) => s.login)
@@ -30,21 +78,14 @@ export default function LoginPage() {
         navigate("/app/estoque", { replace: true })
         return
       }
-      
       const order: ModuleKey[] =["estoque", "scanner", "pedidos", "fornecedores", "historico", "etiquetas", "configuracoes"]
       const fallback = order.find((m) => user.permissions[m])
-      
-      if (fallback) {
-        navigate(`/app/${fallback}`, { replace: true })
-      } else {
-        toast.error("Você não tem permissão de acesso a nenhuma tela.")
-      }
+      if (fallback) navigate(`/app/${fallback}`, { replace: true })
     }
   }, [getCurrentUser, navigate])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    
     if (!username.trim() || !password) {
       toast.error("Preencha usuário e senha")
       return
@@ -54,24 +95,22 @@ export default function LoginPage() {
     
     try {
       if (isFirstSetup) {
+        // BARREIRA DE SEGURANÇA MATEMÁTICA
+        if (!isValidDocument(documentId)) {
+          toast.error("CPF ou CNPJ inválido. Verifique os números.")
+          setLoading(false)
+          return
+        }
+
         if (password.length < 4) {
           toast.error("A senha deve ter pelo menos 4 caracteres")
           setLoading(false)
           return
         }
-        if (!documentId.trim() || documentId.replace(/\D/g, '').length < 11) {
-          toast.error("Informe um CPF ou CNPJ válido")
-          setLoading(false)
-          return
-        }
 
-        try {
-           await setupAdmin({ username, password, name: "Administrador", documentId })
-           toast.success("Conta criada com sucesso!")
-           navigate("/app/estoque", { replace: true })
-        } catch (err: any) {
-           toast.error(err.message || "Erro ao criar conta")
-        }
+        await setupAdmin({ username, password, name: "Administrador", documentId })
+        toast.success("Conta VEXO criada!")
+        navigate("/app/estoque", { replace: true })
 
       } else {
         const res = await login(username, password)
@@ -80,19 +119,11 @@ export default function LoginPage() {
           setLoading(false)
           return
         }
-        toast.success("Bem-vindo!")
-        
-        const user = getCurrentUser()
-        if (user && user.kind !== "admin") {
-           const order: ModuleKey[] =["estoque", "scanner", "pedidos", "fornecedores", "historico", "etiquetas", "configuracoes"]
-           const fallback = order.find((m) => user.permissions[m])
-           if (fallback) {
-             navigate(`/app/${fallback}`, { replace: true })
-             return
-           }
-        }
+        toast.success("Bem-vindo de volta!")
         navigate("/app/estoque", { replace: true })
       }
+    } catch (err: any) {
+      toast.error(err.message || "Erro na operação")
     } finally {
       setLoading(false)
     }
@@ -109,17 +140,14 @@ export default function LoginPage() {
             {'>'} V E X O {'<'}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {isFirstSetup 
-              ? "Crie sua conta para começar"
-              : "Painel de Acesso Seguro"}
+            {isFirstSetup ? "Inicie seu Workspace profissional" : "Painel de Acesso Seguro"}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          
           {isFirstSetup && (
             <div className="space-y-2">
-              <Label htmlFor="document">CPF ou CNPJ</Label>
+              <Label htmlFor="document">CPF ou CNPJ do Titular</Label>
               <div className="relative">
                 <FileText className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -135,7 +163,7 @@ export default function LoginPage() {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="username">Usuário</Label>
+            <Label htmlFor="username">Usuário de Acesso</Label>
             <div className="relative">
               <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -144,7 +172,6 @@ export default function LoginPage() {
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Ex: marcos_admin"
                 className="pl-10 h-11"
-                autoComplete="username"
               />
             </div>
           </div>
@@ -160,13 +187,12 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 className="pl-10 h-11"
-                autoComplete={isFirstSetup ? "new-password" : "current-password"}
               />
             </div>
           </div>
 
           <Button type="submit" className="w-full h-11 text-md font-bold mt-2" disabled={loading}>
-            {loading ? "Processando..." : (isFirstSetup ? "Criar Workspace VEXO" : "Entrar no Sistema")}
+            {loading ? "Validando..." : (isFirstSetup ? "Criar Empresa na VEXO" : "Entrar no Sistema")}
           </Button>
         </form>
       </Card>
