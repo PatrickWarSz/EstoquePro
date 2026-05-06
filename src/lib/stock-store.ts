@@ -107,8 +107,57 @@ export const useStockStore = create<StockState>()(
       clientId: 'local-user',
       qrAliases: {},
 
+     // -- PUXADOR DE DADOS (SUPABASE FETCH) --
       initialize: async () => {
-        set({ loading: false })
+        set({ loading: true });
+        try {
+          const { supabase } = await import('./supabase');
+          const { useAuthStore } = await import('./auth-store');
+          
+          // 1. Verificamos quem é o dono que está logando
+          const user = useAuthStore.getState().getCurrentUser();
+          if (!user) {
+            set({ loading: false });
+            return;
+          }
+
+          // IMPORTANTE: Use o MESMO ID da Delicatta que você colou ontem na addCategory
+          const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
+
+          // 2. Buscamos todas as categorias dessa empresa no Supabase
+          const { data: categoriasBD, error } = await supabase
+            .from('categorias')
+            .select('*')
+            .eq('workspace_id', workspaceId); // Isso garante que só puxe os dados desta empresa
+
+          if (error) {
+            console.error("Erro ao puxar dados do Supabase:", error);
+            set({ loading: false });
+            return;
+          }
+
+          // 3. Traduzimos os dados do Banco para a tela do React entender
+          // O banco devolve [{ id: "1", nome: "elastico" }]
+          // A tela precisa de [{ id: "1", name: "elastico", items: [] }]
+          if (categoriasBD) {
+             const categoriasTraduzidas: Category[] = categoriasBD.map((cat) => ({
+                id: cat.id,
+                name: cat.nome,
+                items:[] // Temporário, deixamos vazio porque ainda não migramos os produtos
+             }));
+
+             // 4. Salva no estado da tela
+             set({
+               categories: categoriasTraduzidas,
+               selectedCategoryId: categoriasTraduzidas.length > 0 ? categoriasTraduzidas[0].id : null,
+               loading: false
+             });
+          }
+
+        } catch (error) {
+          console.error("Erro fatal ao inicializar o banco:", error);
+          set({ loading: false });
+        }
       },
 
       setSelectedCategory: (id) => set({ selectedCategoryId: id }),
