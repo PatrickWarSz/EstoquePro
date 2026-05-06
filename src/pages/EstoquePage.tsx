@@ -39,21 +39,21 @@ export default function EstoquePage() {
   };
 
   return (
-    <div className="px-4 py-6 md:px-6 md:py-8">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8">
+      <div className="mb-4 sm:mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Controle de Estoque</h2>
-          <p className="text-sm text-muted-foreground">Gerencie seu estoque de matéria prima</p>
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Controle de Estoque</h2>
+          <p className="text-xs sm:text-sm text-muted-foreground">Gerencie seu estoque de matéria prima</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => setGlobalHistoryOpen(true)} className="gap-2">
-            <History className="h-4 w-4" />Histórico Geral
+        <div className="-mx-1 flex flex-nowrap gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible">
+          <Button variant="outline" size="sm" onClick={() => setGlobalHistoryOpen(true)} className="shrink-0 gap-2">
+            <History className="h-4 w-4" /><span>Histórico</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setCategoryEditorOpen(true)} className="gap-2">
-            <Settings className="h-4 w-4" />Categorias
+          <Button variant="outline" size="sm" onClick={() => setCategoryEditorOpen(true)} className="shrink-0 gap-2">
+            <Settings className="h-4 w-4" /><span>Categorias</span>
           </Button>
-          <Button size="sm" onClick={() => setAddItemOpen(true)} className="gap-2" disabled={!hasCategories}>
-            <Plus className="h-4 w-4" />Novo Item
+          <Button size="sm" onClick={() => setAddItemOpen(true)} className="shrink-0 gap-2" disabled={!hasCategories}>
+            <Plus className="h-4 w-4" /><span>Novo Item</span>
           </Button>
         </div>
       </div>

@@ -108,5 +108,34 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+
+  html, body, #root {
+    min-height: 100%;
+    /* Use small viewport on mobile so URL bar collapse doesn't cut content */
+    min-height: 100svh;
+  }
+
+  /* iOS zooms into <input> when font-size < 16px. Force 16px on touch keyboards. */
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+
+  /* Honor iPhone safe areas (notch + home indicator) */
+  .safe-px {
+    padding-left: max(env(safe-area-inset-left), 0px);
+    padding-right: max(env(safe-area-inset-right), 0px);
+  }
+  .safe-pb {
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  }
+  .safe-pt {
+    padding-top: max(env(safe-area-inset-top), 0px);
   }
 }

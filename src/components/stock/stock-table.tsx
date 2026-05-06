@@ -90,7 +90,72 @@ export function StockTable({ onViewHistory }: StockTableProps) {
 
   return (
     <div className="rounded-md border bg-card text-card-foreground shadow-sm">
-      <Table>
+      {/* Mobile: card list */}
+      <div className="divide-y md:hidden">
+        {materials.length === 0 ? (
+          <div className="p-6 text-center text-sm text-muted-foreground">
+            Nenhum material cadastrado.
+          </div>
+        ) : (
+          materials.map((item: StockItem & { category: string }) => {
+            const low = item.quantity <= item.minQuantity
+            return (
+              <div key={item.id} className="p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{item.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{item.category}</p>
+                  </div>
+                  <div className={`shrink-0 text-right font-mono text-sm ${low ? "text-destructive font-bold" : ""}`}>
+                    {item.quantity} <span className="text-xs text-muted-foreground">{item.unit}</span>
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 flex-1 text-emerald-600 border-emerald-200"
+                    onClick={() => handleMovement(item.id, "entrada")}
+                  >
+                    <ArrowUpCircle className="mr-1 h-4 w-4" />
+                    Entrada
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 flex-1 text-rose-600 border-rose-200"
+                    onClick={() => handleMovement(item.id, "saida")}
+                  >
+                    <ArrowDownCircle className="mr-1 h-4 w-4" />
+                    Saída
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onViewHistory(item)}>
+                        <History className="mr-2 h-4 w-4" /> Histórico
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleEditItem(item.id)}>
+                        <PenSquare className="mr-2 h-4 w-4" /> Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteItem(item.id)}>
+                        <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      {/* Desktop / tablet: table */}
+      <Table className="hidden md:table">
         <TableHeader>
           <TableRow>
             <TableHead>Material</TableHead>
