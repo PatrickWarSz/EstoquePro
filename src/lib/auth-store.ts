@@ -10,7 +10,7 @@ export type ModuleKey =
   | "etiquetas"
   | "configuracoes"
 
-export const ALL_MODULES: { key: ModuleKey; label: string; description: string }[] = [
+export const ALL_MODULES: { key: ModuleKey; label: string; description: string }[] =[
   { key: "estoque", label: "Estoque", description: "Visualizar e movimentar itens" },
   { key: "pedidos", label: "Pedidos", description: "Criar e registrar entregas" },
   { key: "fornecedores", label: "Fornecedores", description: "Gerenciar fornecedores" },
@@ -66,7 +66,6 @@ export type CurrentUser =
 
 const id = () => Math.random().toString(36).substring(2, 12) + Date.now().toString(36)
 
-// Simple SHA-256 hex hash (WebCrypto). Local-only auth — adequate vs plaintext.
 export async function hashPassword(password: string): Promise<string> {
   const enc = new TextEncoder().encode(password)
   const buf = await crypto.subtle.digest("SHA-256", enc)
@@ -78,7 +77,8 @@ export async function hashPassword(password: string): Promise<string> {
 interface AuthState {
   admin: AdminAccount | null
   employees: Employee[]
-  currentUserId: string | null // 'admin' | employee.id | null
+  currentUserId: string | null 
+  workspaceId: string | null // AQUI ESTÁ A VARIÁVEL QUE ADICIONAMOS!
 
   setupAdmin: (input: { username: string; password: string; name: string; companyName?: string }) => Promise<void>
   login: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>
@@ -96,15 +96,54 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       admin: null,
-      employees: [],
+      employees:[], // O SEU ESTAVA SEM ESSE COLCHETE AQUI E QUEBROU O ARQUIVO!
       currentUserId: null,
+      workspaceId: null, // AQUI ESTÁ O VALOR INICIAL!
 
+      // -- CRIAR EMPRESA E DONO (SUPABASE) --
       setupAdmin: async ({ username, password, name, companyName }) => {
-        const passwordHash = await hashPassword(password)
-        set({
-          admin: { username: username.trim().toLowerCase(), passwordHash, name: name.trim(), companyName },
-          currentUserId: "admin",
-        })
+        const { supabase } = await import('./supabase');
+        const passwordHash = await hashPassword(password);
+        const cnpjCpfTemporario = username.trim().toLowerCase() + "_cpf"; 
+
+        try {
+          // 1. Cria a Empresa (Workspace)
+          const { data: workspaceData, error: workError } = await supabase
+            .from('workspaces')
+            .insert([{ 
+              cnpj_cpf: cnpjCpfTemporario, 
+              nome_empresa: companyName || "Minha Empresa" 
+            }])
+            .select()
+            .single();
+
+          if (workError) throw workError;
+
+          // 2. Cria o Usuário Dono (Admin)
+          const { error: userError } = await supabase
+            .from('usuarios')
+            .insert([{
+              workspace_id: workspaceData.id,
+              nome: name.trim(),
+              username: username.trim().toLowerCase(),
+              tipo: 'admin',
+              permissoes: fullPermissions(),
+              ativo: true
+            }]);
+
+          if (userError) throw userError;
+
+          // 3. Salva no local apenas para a tela manter a sessão logada
+          set({
+            admin: { username: username.trim().toLowerCase(), passwordHash, name: name.trim(), companyName },
+            currentUserId: "admin",
+            workspaceId: workspaceData.id 
+          });
+
+        } catch (error) {
+          console.error("Erro ao criar ambiente:", error);
+          throw error;
+        }
       },
 
       login: async (username, password) => {

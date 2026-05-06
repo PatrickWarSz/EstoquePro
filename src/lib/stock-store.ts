@@ -98,7 +98,7 @@ export const useStockStore = create<StockState>()(
       clientId: 'local-user',
       qrAliases: {},
 
-      // -- FETCH SUPREMO (PUXA TUDO DO BANCO AO ENTRAR) --
+      // -- FETCH SUPREMO BLINDADO (PUXA AS 8 TABELAS DO BANCO AO ENTRAR) --
       initialize: async () => {
         set({ loading: true });
         try {
@@ -110,47 +110,66 @@ export const useStockStore = create<StockState>()(
 
           const workspaceId = "0356ee6f-c655-4ae8-ad91-ff82703e07e9";
 
-          // Puxando as 4 tabelas principais
-          const { data: catBD } = await supabase.from('categorias').select('*').eq('workspace_id', workspaceId);
-          const { data: prodBD } = await supabase.from('produtos').select('*').eq('workspace_id', workspaceId);
-          const { data: movBD } = await supabase.from('movimentacoes').select('*').eq('workspace_id', workspaceId);
-          const { data: supBD } = await supabase.from('fornecedores').select('*').eq('workspace_id', workspaceId);
-          const { data: locBD } = await supabase.from('locais_estoque').select('*').eq('workspace_id', workspaceId);
+          // Puxando TODAS as tabelas
+          const[catRes, prodRes, movRes, supRes, locRes, pedRes, entRes, qrRes] = await Promise.all([
+            supabase.from('categorias').select('*').eq('workspace_id', workspaceId),
+            supabase.from('produtos').select('*').eq('workspace_id', workspaceId),
+            supabase.from('movimentacoes').select('*').eq('workspace_id', workspaceId),
+            supabase.from('fornecedores').select('*').eq('workspace_id', workspaceId),
+            supabase.from('locais_estoque').select('*').eq('workspace_id', workspaceId),
+            supabase.from('pedidos').select('*').eq('workspace_id', workspaceId),
+            supabase.from('entregas_pedido').select('*').eq('workspace_id', workspaceId),
+            supabase.from('aliases_qr').select('*').eq('workspace_id', workspaceId)
+          ]);
 
-          // Montando Fornecedores
-          const fornecedores = (supBD ||[]).map(f => ({
-            id: f.id, name: f.nome, contact: f.contato || '', phone: f.telefone || '', email: f.email || '', address: f.endereco || ''
-          }));
+          // Montando Fornecedores e Locais
+          const fornecedores = (supRes.data ||[]).map(f => ({ id: f.id, name: f.nome, contact: f.contato || '', phone: f.telefone || '', email: f.email || '', address: f.endereco || '' }));
+          const locais = (locRes.data ||[]).map(l => ({ id: l.id, name: l.nome, description: l.descricao || '', itemRefs: l.item_refs ? JSON.parse(l.item_refs) :[] }));
 
-          // Montando Locais
-          const locais = (locBD ||[]).map(l => ({
-            id: l.id, name: l.nome, description: l.descricao || '', itemRefs: l.item_refs ? JSON.parse(l.item_refs) :[]
-          }));
+          // Montando QR Codes
+          const qrAliases: Record<string, QrAlias> = {};
+          (qrRes.data || []).forEach(qr => {
+            if (qr.tipo === 'item') qrAliases[qr.chave] = { kind: 'item', categoryId: qr.categoria_id, itemId: qr.item_id };
+            else if (qr.tipo === 'location') qrAliases[qr.chave] = { kind: 'location', locationId: qr.location_id };
+          });
+
+          // Montando Pedidos e Entregas
+          const pedidosFront: Order[] = (pedRes.data ||[]).map(p => {
+             const entregas = (entRes.data ||[])
+               .filter(e => e.pedido_id === p.id)
+               .map(e => ({ id: e.id, date: e.data, quantity: Number(e.quantidade), stockEntryQuantity: Number(e.quantidade_estoque), notes: e.observacoes, createStockEntry: e.gerou_entrada_estoque }));
+             
+             return {
+               id: p.id, supplierId: p.fornecedor_id, linkedCategoryId: p.categoria_id, linkedItemId: p.produto_id,
+               unit: p.unidade, quantityOrdered: Number(p.quantidade_pedida), quantityDelivered: Number(p.quantidade_entregue),
+               expectedDate: p.data_esperada, deliveryDate: entregas.length > 0 ? entregas[entregas.length - 1].date : undefined,
+               deadlineStatus: p.status_prazo as any, deliveryStatus: p.status_entrega as any, notes: p.observacoes,
+               stockEntryCreated: p.entrada_estoque_criada, stockEntryQuantity: Number(p.quantidade_estoque_gerada), deliveries: entregas
+             };
+          });
 
           // Montando Categorias + Produtos + Histórico
-          if (catBD) {
-             const categorias: Category[] = catBD.map((cat) => {
-                const itens = (prodBD ||[])
+          let categorias: Category[] =[];
+          if (catRes.data) {
+             categorias = catRes.data.map((cat) => {
+                const itens = (prodRes.data ||[])
                   .filter(prod => prod.categoria_id === cat.id)
                   .map(prod => {
-                    const historicoItem = (movBD ||[])
+                    const historicoItem = (movRes.data ||[])
                       .filter(m => m.produto_id === prod.id)
-                      .map(m => ({
-                        id: m.id, type: m.tipo as 'entrada'|'saida', quantity: Number(m.quantidade), newTotal: Number(m.novo_total),
-                        date: m.data, note: m.observacao || '', orderId: m.pedido_id, operatorId: m.operador_id, operatorName: m.nome_operador || ''
-                      }));
-
-                    return {
-                      id: prod.id, name: prod.nome, quantity: Number(prod.quantidade), minQuantity: Number(prod.estoque_minimo),
-                      unit: prod.unidade, categoryId: prod.categoria_id, supplierIds: prod.fornecedor_ids ||[], history: historicoItem
-                    };
+                      .map(m => ({ id: m.id, type: m.tipo as 'entrada'|'saida', quantity: Number(m.quantidade), newTotal: Number(m.novo_total), date: m.data, note: m.observacao || '', orderId: m.pedido_id, operatorId: m.operador_id, operatorName: m.nome_operador || '' }));
+                    return { id: prod.id, name: prod.nome, quantity: Number(prod.quantidade), minQuantity: Number(prod.estoque_minimo), unit: prod.unidade, categoryId: prod.categoria_id, supplierIds: prod.fornecedor_ids ||[], history: historicoItem };
                   });
-
                 return { id: cat.id, name: cat.nome, items: itens };
              });
-
-             set({ categories: categorias, suppliers: fornecedores, locations: locais, selectedCategoryId: categorias.length > 0 ? categorias[0].id : null, loading: false });
           }
+
+          // Injetando TUDO no Estado Front-end
+          set({ 
+            categories: categorias, suppliers: fornecedores, locations: locais, orders: pedidosFront, qrAliases, 
+            selectedCategoryId: categorias.length > 0 ? categorias[0].id : null, loading: false 
+          });
+
         } catch (error) {
           console.error("Erro fatal ao inicializar o banco:", error);
           set({ loading: false });
