@@ -144,21 +144,76 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      // -- LOGIN PELA NUVEM (SUPABASE) --
       login: async (username, password) => {
-        const u = username.trim().toLowerCase()
-        const hash = await hashPassword(password)
-        const { admin, employees } = get()
-        if (admin && admin.username === u) {
-          if (admin.passwordHash !== hash) return { ok: false, error: "Senha incorreta" }
-          set({ currentUserId: "admin" })
-          return { ok: true }
+        const u = username.trim().toLowerCase();
+        const hash = await hashPassword(password);
+        const { supabase } = await import('./supabase');
+
+        try {
+          // 1. Busca o usuário no banco de dados
+          const { data: userData, error: userError } = await supabase
+            .from('usuarios')
+            .select('id, workspace_id, nome, username, tipo, permissoes, ativo, senha_hash, criado_em')
+            .eq('username', u)
+            .single();
+
+          if (userError || !userData) {
+            return { ok: false, error: "Usuário não encontrado." };
+          }
+
+          if (!userData.ativo) {
+            return { ok: false, error: "Usuário desativado." };
+          }
+
+          if (userData.senha_hash !== hash) {
+            return { ok: false, error: "Senha incorreta." };
+          }
+
+          // 2. Se a senha bater, puxamos TODOS os funcionários da empresa dele
+          const { data: teamData } = await supabase
+            .from('usuarios')
+            .select('*')
+            .eq('workspace_id', userData.workspace_id)
+            .eq('tipo', 'funcionario');
+
+          // 3. Convertemos os dados do banco para o formato que a tela do Lovable entende
+          const employeesLoaded: Employee[] = (teamData || []).map(emp => ({
+            id: emp.id,
+            username: emp.username,
+            passwordHash: emp.senha_hash,
+            name: emp.nome,
+            permissions: emp.permissoes,
+            active: emp.ativo,
+            createdAt: emp.criado_em,
+          }));
+
+          // 4. Injetamos os dados na memória (Zustand) para o sistema rodar liso
+          if (userData.tipo === 'admin') {
+            set({
+              currentUserId: "admin",
+              workspaceId: userData.workspace_id,
+              admin: {
+                username: userData.username,
+                passwordHash: userData.senha_hash,
+                name: userData.nome,
+              },
+              employees: employeesLoaded
+            });
+          } else {
+            set({
+              currentUserId: userData.id,
+              workspaceId: userData.workspace_id,
+              employees: employeesLoaded
+            });
+          }
+
+          return { ok: true };
+
+        } catch (error) {
+          console.error("Erro crítico no login:", error);
+          return { ok: false, error: "Erro de conexão com a nuvem." };
         }
-        const emp = employees.find((e) => e.username === u)
-        if (!emp) return { ok: false, error: "Usuário não encontrado" }
-        if (!emp.active) return { ok: false, error: "Usuário desativado" }
-        if (emp.passwordHash !== hash) return { ok: false, error: "Senha incorreta" }
-        set({ currentUserId: emp.id })
-        return { ok: true }
       },
 
       logout: () => set({ currentUserId: null }),
