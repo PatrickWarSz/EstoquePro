@@ -1,20 +1,16 @@
-# VEXO Ecosystem - Global Architecture Rules
+# VEXO Ecosystem - Core Architecture Rules
 
-## 1. The Business Context
-We are building a B2B SaaS Ecosystem. Our main product is a unified Workspace ("VEXO Hub"), but we also sell individual Micro-frontends (like "Stock Management").
-Currently, we are developing the "Stock Management" application.
-All our applications, present and future, will share a SINGLE central database in Supabase called "VEXO Core".
+## 1. Business Context
+- **Company:** `> V E X O < | software & solutions` (SaaS B2B).
+- **Current Product:** Stock Management App (Frontend on React/Vite, Backend on Supabase).
+- **Vision:** A unified workspace where clients log in once and access the modules they paid for.
 
-## 2. Multi-Tenant Architecture (CRUCIAL)
-- Every application MUST run on a Multi-tenant architecture.
-- The root identifier for an account is NEVER just the user's email. It is the Company's `CNPJ` (or CPF).
-- The core database table is `workspaces` (which represents the company). The `cnpj_cpf` field must be UNIQUE.
-- Users (employees) belong to a `workspace_id`.
-- ALL database tables (products, stock movements, etc.) must include a `workspace_id` column.
-- ALL database queries must implement Row Level Security (RLS) filtering by `workspace_id`. A company cannot under any circumstance see another company's data.
+## 2. Multi-Tenant Architecture & Auth
+- **Database:** A single Supabase project ("VEXO Core") with 10 tables: `workspaces`, `usuarios`, `categorias`, `produtos`, `movimentacoes`, `fornecedores`, `locais_estoque`, `pedidos`, `entregas_pedido`, `aliases_qr`.
+- **Primary Key:** `workspace_id` (Linked to the company's CNPJ/CPF).
+- **Auth Strategy:** We use `src/lib/auth-store.ts` connecting to Supabase tables. `setupAdmin` creates the `workspace` and the owner in `usuarios`. `login` validates the password hash from the `usuarios` table and fetches the `workspace_id`.
+- **Security:** RLS is active on ALL tables.
 
-## 3. Tech Stack & Current Goal
-- Frontend: React, TypeScript, Vite, Tailwind CSS, Shadcn UI.
-- State Management: We are migrating FROM local state (Zustand/LocalStorage) TO a real Supabase Backend.
-- Backend/Auth: Supabase.
-- Current Goal: Analyze the existing local data structure and create the corresponding Supabase SQL schema to make this a functional, production-ready SaaS.
+## 3. Tech Stack & State
+- React, TypeScript, Zustand, Tailwind, Shadcn UI.
+- **Data Flow:** The app reads/writes directly to Supabase. Zustand is only used for local reactive UI state. The `initialize()` function in `stock-store.ts` fetches all 8 tables simultaneously on load.
