@@ -3,6 +3,20 @@ import { persist } from "zustand/middleware"
 
 export type ModuleKey = "estoque" | "pedidos" | "fornecedores" | "historico" | "scanner" | "etiquetas" | "configuracoes"
 
+export const ALL_MODULES: { key: ModuleKey; label: string; description: string }[] =[
+  { key: "estoque", label: "Estoque", description: "Visualizar e movimentar itens" },
+  { key: "pedidos", label: "Pedidos", description: "Criar e registrar entregas" },
+  { key: "fornecedores", label: "Fornecedores", description: "Gerenciar fornecedores" },
+  { key: "historico", label: "Histórico", description: "Ver histórico geral" },
+  { key: "scanner", label: "Scanner QR", description: "Ler QR para entrada/saída" },
+  { key: "etiquetas", label: "Etiquetas QR", description: "Gerar e imprimir etiquetas" },
+  { key: "configuracoes", label: "Configurações", description: "Ajustes do sistema" },
+]
+
+export const emptyPermissions = () => ({
+  estoque: false, pedidos: false, fornecedores: false, historico: false, scanner: false, etiquetas: false, configuracoes: false,
+})
+
 export const fullPermissions = () => ({
   estoque: true, pedidos: true, fornecedores: true, historico: true, scanner: true, etiquetas: true, configuracoes: true,
 })
