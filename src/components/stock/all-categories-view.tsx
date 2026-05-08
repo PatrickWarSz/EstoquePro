@@ -1,4 +1,3 @@
-
 import { useState, useMemo } from "react"
 import {
   ChevronDown,
@@ -12,20 +11,10 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
 import { useStockStore } from "@/lib/stock-store"
 import { StockItem } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { toast } from "sonner"
+import { MovementDialog } from "./movement-dialog"
 
 type StatusFilter = "all" | "garantido" | "baixo" | "zerado"
 
@@ -35,16 +24,16 @@ interface AllCategoriesViewProps {
 }
 
 export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCategoriesViewProps) {
-  const { categories, updateItemQuantity, setSelectedCategory } = useStockStore()
+  const { categories } = useStockStore()
   const [search, setSearch] = useState("")
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  
+  // Agora usamos o estado correto para abrir nosso novo MovementDialog!
   const [movementDialog, setMovementDialog] = useState<{
     item: StockItem
     categoryId: string
     type: "entrada" | "saida"
   } | null>(null)
-  const [quantity, setQuantity] = useState("")
-  const [note, setNote] = useState("")
 
   const getStatus = (item: StockItem) => {
     if (item.quantity === 0) return "zerado"
@@ -67,7 +56,7 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
         return { ...cat, items }
       })
       .filter((cat) => cat.items.length > 0)
-  }, [categories, search, statusFilter])
+  },[categories, search, statusFilter])
 
   const totalFiltered = filteredCategories.reduce(
     (acc, cat) => acc + cat.items.length,
@@ -76,34 +65,6 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
 
   const toggleCollapse = (catId: string) => {
     setCollapsed((prev) => ({ ...prev, [catId]: !prev[catId] }))
-  }
-
-  const handleMovement = () => {
-    if (!movementDialog || !quantity) return
-    const qty = parseInt(quantity)
-    if (isNaN(qty) || qty <= 0) {
-      toast.error("Quantidade inválida")
-      return
-    }
-    const newQuantity =
-      movementDialog.type === "entrada"
-        ? movementDialog.item.quantity + qty
-        : Math.max(0, movementDialog.item.quantity - qty)
-
-    updateItemQuantity(
-      movementDialog.categoryId,
-      movementDialog.item.id,
-      newQuantity,
-      movementDialog.type,
-      qty,
-      note.trim() || undefined
-    )
-    toast.success(
-      `${movementDialog.type === "entrada" ? "Entrada" : "Saída"} de ${qty} ${movementDialog.item.unit} registrada`
-    )
-    setMovementDialog(null)
-    setQuantity("")
-    setNote("")
   }
 
   const getStatusBadge = (status: string) => {
@@ -286,28 +247,26 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                                   {getStatusBadge(status)}
                                 </td>
                                 <td className="px-3 sm:px-4 py-2.5 text-right whitespace-nowrap">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    aria-label="Entrada"
-                                    className="h-9 w-9 sm:h-7 sm:w-7 text-success hover:bg-success/10 hover:text-success"
-                                    onClick={() =>
-                                      setMovementDialog({ item, categoryId: cat.id, type: "entrada" })
-                                    }
-                                  >
-                                    <ArrowUpCircle className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    aria-label="Saída"
-                                    className="h-9 w-9 sm:h-7 sm:w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                    onClick={() =>
-                                      setMovementDialog({ item, categoryId: cat.id, type: "saida" })
-                                    }
-                                  >
-                                    <ArrowDownCircle className="h-4 w-4" />
-                                  </Button>
+                                  <div className="flex justify-end gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 h-8"
+                                      onClick={() => setMovementDialog({ item, categoryId: cat.id, type: "entrada" })}
+                                    >
+                                      <ArrowUpCircle className="mr-1 h-4 w-4" />
+                                      <span className="hidden sm:inline">Entrada</span>
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-rose-600 border-rose-200 hover:bg-rose-50 h-8"
+                                      onClick={() => setMovementDialog({ item, categoryId: cat.id, type: "saida" })}
+                                    >
+                                      <ArrowDownCircle className="mr-1 h-4 w-4" />
+                                      <span className="hidden sm:inline">Saída</span>
+                                    </Button>
+                                  </div>
                                 </td>
                               </tr>
                             )
@@ -323,73 +282,16 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
         </div>
       )}
 
-      {/* Movement Dialog */}
-      <Dialog
-        open={movementDialog !== null}
-        onOpenChange={() => { setMovementDialog(null); setQuantity(""); setNote("") }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {movementDialog?.type === "entrada" ? (
-                <ArrowUpCircle className="h-5 w-5 text-success" />
-              ) : (
-                <ArrowDownCircle className="h-5 w-5 text-destructive" />
-              )}
-              {movementDialog?.type === "entrada" ? "Registrar Entrada" : "Registrar Saída"}
-            </DialogTitle>
-            <DialogDescription>
-              {movementDialog?.item.name} — Estoque atual:{" "}
-              <strong>
-                {movementDialog?.item.quantity} {movementDialog?.item.unit}
-              </strong>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="qty-all">Quantidade</Label>
-            <Input
-              id="qty-all"
-              type="number"
-              min="1"
-              placeholder="Digite a quantidade"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              className="mt-2"
-              autoFocus
-              onKeyDown={(e) => e.key === "Enter" && handleMovement()}
-            />
-            <div className="mt-4 space-y-2">
-              <Label htmlFor="note-all">
-                Descrição / Observação{" "}
-                <span className="text-muted-foreground font-normal">(opcional)</span>
-              </Label>
-              <Textarea
-                id="note-all"
-                placeholder="Ex: NF 1234, chegada do pedido, ajuste de inventário..."
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className="resize-none"
-                rows={2}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setMovementDialog(null); setQuantity("") }}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleMovement}
-              className={
-                movementDialog?.type === "entrada"
-                  ? "bg-success hover:bg-success/90"
-                  : "bg-destructive hover:bg-destructive/90"
-              }
-            >
-              Confirmar {movementDialog?.type === "entrada" ? "Entrada" : "Saída"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* NOVO MOVEMENT DIALOG OFICIAL IMPORTADO AQUI */}
+      {movementDialog && (
+        <MovementDialog
+          item={movementDialog.item}
+          categoryId={movementDialog.categoryId}
+          type={movementDialog.type}
+          open={movementDialog !== null}
+          onOpenChange={(open) => !open && setMovementDialog(null)}
+        />
+      )}
     </div>
   )
 }

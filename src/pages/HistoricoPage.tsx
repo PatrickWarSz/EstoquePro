@@ -50,7 +50,14 @@ export default function HistoricoPage() {
                 {entries.map((e, i) => (
                   <tr key={i} className="border-t border-border hover:bg-muted/30">
                     <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{new Date(e.date).toLocaleString("pt-BR")}</td>
-                    <td className="px-4 py-2.5 font-medium">{e.itemName}</td>
+                    <td className="px-4 py-2.5">
+                      <p className="font-medium">{e.itemName}</p>
+                      {e.note && (
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {e.note}
+                        </p>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 text-muted-foreground">{e.categoryName}</td>
                     <td className="px-4 py-2.5 text-muted-foreground">{e.operatorName || "—"}</td>
                     <td className="px-4 py-2.5">

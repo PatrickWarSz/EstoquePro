@@ -29,12 +29,19 @@ interface AddItemDialogProps {
   defaultCategoryId?: string
 }
 
-const UNIT_OPTIONS = [
+const UNIT_OPTIONS =[
+  { value: "un",    label: "Unidades (un)" },
+  { value: "pc",    label: "Peças (pç)" },
+  { value: "cx",    label: "Caixas (cx)" },
+  { value: "par",   label: "Pares" },
+  { value: "kit",   label: "Kits" },
   { value: "rolo",  label: "Rolos" },
   { value: "m",     label: "Metros (m)" },
-  { value: "un",    label: "Unidades (un)" },
+  { value: "cm",    label: "Centímetros (cm)" },
   { value: "kg",    label: "Quilogramas (kg)" },
   { value: "g",     label: "Gramas (g)" },
+  { value: "L",     label: "Litros (L)" },
+  { value: "ml",    label: "Mililitros (ml)" },
 ]
 
 export function AddItemDialog({
