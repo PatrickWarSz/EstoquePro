@@ -63,11 +63,11 @@ export const useAuthStore = create<AuthState>()(
       currentUserId: null,
       workspaceId: null,
 
-      setupAdmin: async ({ username, password, name, companyName, documentId, ownerCpf }) => {
+     setupAdmin: async ({ username, password, name, companyName, documentId, ownerCpf }) => {
         const { supabase } = await import('./supabase');
         const cleanDoc = documentId.replace(/\D/g, '');
         const cleanCpf = ownerCpf ? ownerCpf.replace(/\D/g, '') : cleanDoc;
-        const u = username.toLowerCase().trim(); // Neste caso, o 'username' agora é o E-mail Real do Dono
+        const u = username.toLowerCase().trim(); // E-mail Real do Dono
         
         // 1. Cria o Workspace com os dados fiscais e plano
         const { data: workspace, error: wErr } = await supabase
@@ -82,14 +82,14 @@ export const useAuthStore = create<AuthState>()(
           .select().single();
         if (wErr) throw wErr;
 
-        // 2. Cria o Dono no Auth Nativo usando o E-mail Real (NÃO USAMOS MAIS E-MAIL FANTASMA AQUI)
+        // 2. Cria o Dono no Auth Nativo usando o E-mail Real
         const { data: authData, error: authErr } = await supabase.auth.signUp({
           email: u,
           password: password,
         });
         if (authErr) throw authErr;
 
-        // 3. Salva o Dono na tabela usuários (com username igual ao e-mail para compatibilidade)
+        // 3. Salva o Dono na tabela usuários
         const { error: uErr } = await supabase
           .from('usuarios')
           .insert([{
@@ -103,6 +103,25 @@ export const useAuthStore = create<AuthState>()(
             senha_hash: 'migrated_to_auth'
           }]);
         if (uErr) throw uErr;
+
+        // 4. A MÁGICA FINANCEIRA: Acorda a Edge Function para criar o cliente no Asaas!
+        try {
+          console.log("Iniciando integração com Asaas...");
+          const { data: asaasData, error: asaasFnErr } = await supabase.functions.invoke('asaas-customer', {
+            body: {
+              workspaceId: workspace.id,
+              companyName: companyName,
+              documentId: cleanDoc,
+              email: u
+            }
+          });
+          
+          if (asaasFnErr) console.error("Falha ao chamar a Edge Function:", asaasFnErr);
+          else console.log("Cliente criado no Asaas com sucesso:", asaasData);
+        } catch (err) {
+          // Usamos catch para o sistema não travar o login do cliente caso a API do Asaas caia.
+          console.error("Erro na comunicação com Asaas:", err);
+        }
 
         set({
           admin: { username: u, passwordHash: 'migrated', name, companyName },
