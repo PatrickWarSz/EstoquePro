@@ -93,7 +93,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {isAdmin && (
+      {isAdmin && (
           <SidebarGroup className="mt-4">
             {!collapsed && (
               <SidebarGroupLabel className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -110,6 +110,17 @@ export function AppSidebar() {
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                
+                {/* NOVO LINK RESTRITO PARA O DONO: CONFIGURAÇÕES E ASSINATURA */}
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink to="/app/configuracoes" className={linkBase} activeClassName={linkActive}>
+                      <Settings className="h-4 w-4 shrink-0" />
+                      {!collapsed && <span>Configurações</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
