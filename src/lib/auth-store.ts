@@ -43,9 +43,10 @@ interface AuthState {
   employees: Employee[]
   currentUserId: string | null 
   workspaceId: string | null 
-  setupAdmin: (input: { username: string; password: string; name: string; companyName?: string; documentId: string }) => Promise<void>
+  setupAdmin: (input: { username: string; password: string; name: string; companyName?: string; documentId: string; ownerCpf?: string }) => Promise<void>
   login: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>
   logout: () => void
+  resetPassword: (email: string) => Promise<{ ok: boolean; error?: string }>
   addEmployee: (input: { username: string; password: string; name: string; permissions: any }) => Promise<{ ok: boolean; id?: string; error?: string }>
   updateEmployee: (id: string, updates: Partial<Employee>) => void
   removeEmployee: (id: string) => void
@@ -62,31 +63,40 @@ export const useAuthStore = create<AuthState>()(
       currentUserId: null,
       workspaceId: null,
 
-      setupAdmin: async ({ username, password, name, companyName, documentId }) => {
+      setupAdmin: async ({ username, password, name, companyName, documentId, ownerCpf }) => {
         const { supabase } = await import('./supabase');
         const cleanDoc = documentId.replace(/\D/g, '');
-        const u = username.toLowerCase().trim();
-        const virtualEmail = `${u}@${cleanDoc}.vexo`;
-
+        const cleanCpf = ownerCpf ? ownerCpf.replace(/\D/g, '') : cleanDoc;
+        const u = username.toLowerCase().trim(); // Neste caso, o 'username' agora é o E-mail Real do Dono
+        
+        // 1. Cria o Workspace com os dados fiscais e plano
         const { data: workspace, error: wErr } = await supabase
           .from('workspaces')
-          .insert([{ cnpj_cpf: cleanDoc, nome_empresa: companyName }])
+          .insert([{ 
+            cnpj_cpf: cleanDoc, 
+            nome_empresa: companyName,
+            cpf_titular: cleanCpf,
+            status_assinatura: 'trialing',
+            plano_atual: 'estoque_pro'
+          }])
           .select().single();
         if (wErr) throw wErr;
 
+        // 2. Cria o Dono no Auth Nativo usando o E-mail Real (NÃO USAMOS MAIS E-MAIL FANTASMA AQUI)
         const { data: authData, error: authErr } = await supabase.auth.signUp({
-          email: virtualEmail,
+          email: u,
           password: password,
         });
         if (authErr) throw authErr;
 
+        // 3. Salva o Dono na tabela usuários (com username igual ao e-mail para compatibilidade)
         const { error: uErr } = await supabase
           .from('usuarios')
           .insert([{
             id: authData.user?.id,
             workspace_id: workspace.id,
             nome: name,
-            username: u,
+            username: u, 
             tipo: 'admin',
             permissoes: fullPermissions(),
             ativo: true,
@@ -105,6 +115,7 @@ export const useAuthStore = create<AuthState>()(
         const { supabase } = await import('./supabase');
         const u = username.trim().toLowerCase();
 
+        // 1. O Pulo do Gato Híbrido: Acha o usuário na nossa tabela
         const { data: user, error: dbErr } = await supabase
           .from('usuarios')
           .select('*')
@@ -112,25 +123,32 @@ export const useAuthStore = create<AuthState>()(
           .single();
 
         if (dbErr || !user) {
-          return { ok: false, error: "Usuário ou senha incorretos." };
+          return { ok: false, error: "Usuário/E-mail ou senha incorretos." };
         }
 
-        const { data: workspace } = await supabase
-          .from('workspaces')
-          .select('cnpj_cpf')
-          .eq('id', user.workspace_id)
-          .single();
+        // 2. Define o E-mail que vai logar no Supabase (Real para Admin, Fantasma para Funcionário)
+        let loginEmail = u; // Se for o dono (Admin), o 'username' já é o E-mail real dele.
 
-        const cnpjCpf = workspace?.cnpj_cpf || '00000000000000';
-        const virtualEmail = `${u}@${cnpjCpf}.vexo`;
+        if (user.tipo === 'funcionario') {
+          // Se for funcionário, nós montamos o e-mail fantasma na hora.
+          const { data: workspace } = await supabase
+            .from('workspaces')
+            .select('cnpj_cpf')
+            .eq('id', user.workspace_id)
+            .single();
 
+          const cnpjCpf = workspace?.cnpj_cpf || '00000000000000';
+          loginEmail = `${u}@${cnpjCpf}.vexo`;
+        }
+
+        // 3. Faz o login no motor de segurança
         const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
-          email: virtualEmail,
+          email: loginEmail,
           password: password,
         });
 
         if (authErr || !authData.user) {
-          return { ok: false, error: "Usuário ou senha incorretos." };
+          return { ok: false, error: "Usuário/E-mail ou senha incorretos." };
         }
 
         set({
@@ -224,6 +242,16 @@ export const useAuthStore = create<AuthState>()(
         // O ideal é usar Edge Functions. Por enquanto, apenas notificamos o Admin.
         toast.info("Para resetar a senha deste funcionário, use o painel administrativo do Supabase ou configure uma Edge Function.");
         console.log(`Solicitação de reset para ID: ${id} com nova senha: ${newPassword}`);
+      },
+
+      resetPassword: async (email) => {
+        const { supabase } = await import('./supabase');
+        // Pede pro Supabase enviar o e-mail oficial de troca de senha
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: `${window.location.origin}/login`, 
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true };
       },
 
       getCurrentUser: () => {

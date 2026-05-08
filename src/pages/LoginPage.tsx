@@ -58,10 +58,12 @@ export default function LoginPage() {
   const setupAdmin = useAuthStore((s) => s.setupAdmin)
   const login = useAuthStore((s) => s.login)
   const getCurrentUser = useAuthStore((s) => s.getCurrentUser)
+  const resetPassword = useAuthStore((s) => s.resetPassword) 
 
   const [username, setUsername] = useState("")
   const[password, setPassword] = useState("")
   const [documentId, setDocumentId] = useState("")
+  const [ownerCpf, setOwnerCpf] = useState("")
   const[companyName, setCompanyName] = useState("")
   const [loading, setLoading] = useState(false)
   
@@ -108,7 +110,7 @@ export default function LoginPage() {
           return
         }
 
-        await setupAdmin({ username, password, name: "Administrador", documentId, companyName })
+        await setupAdmin({ username, password, name: "Administrador", documentId, companyName, ownerCpf })
         toast.success("Conta VEXO criada!")
         navigate("/app/estoque", { replace: true })
 
@@ -129,7 +131,7 @@ export default function LoginPage() {
     }
   }
 
-  return (
+ return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-muted/40 p-4">
       <Card className="w-full max-w-md p-8 shadow-xl border-t-4 border-t-primary">
         <div className="mb-6 flex flex-col items-center text-center">
@@ -163,7 +165,7 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="document">CPF ou CNPJ do Titular</Label>
+                <Label htmlFor="document">CNPJ da Empresa (ou seu CPF)</Label>
                 <div className="relative">
                   <FileText className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -175,25 +177,60 @@ export default function LoginPage() {
                   />
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ownerCpf">CPF do Titular Responsável</Label>
+                <div className="relative">
+                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="ownerCpf"
+                    value={ownerCpf}
+                    onChange={(e) => setOwnerCpf(e.target.value)}
+                    placeholder="Necessário para segurança e assinatura"
+                    className="pl-10 h-11"
+                  />
+                </div>
+              </div>
             </>
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="username">Usuário de Acesso</Label>
+            <Label htmlFor="username">{isRegistering ? "E-mail Profissional (Para Login e Faturas)" : "E-mail ou Usuário de Acesso"}</Label>
             <div className="relative">
               <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Ex: marcos_admin"
+                placeholder={isRegistering ? "contato@suaempresa.com" : "Ex: admin@loja.com ou joao_estoque"}
                 className="pl-10 h-11"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Senha</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Senha</Label>
+              {!isRegistering && (
+                <button 
+                  type="button" 
+                  className="text-xs font-semibold text-primary hover:underline" 
+                  onClick={async () => {
+                    if (!username.trim() || !username.includes('@')) {
+                      toast.error("Digite seu e-mail no campo 'Usuário' para recuperar a senha.");
+                      return;
+                    }
+                    toast.loading("Enviando e-mail de recuperação...");
+                    const res = await resetPassword(username);
+                    toast.dismiss();
+                    if (res.ok) toast.success("E-mail enviado! Verifique sua caixa de entrada e spam.");
+                    else toast.error("Erro ao enviar: " + res.error);
+                  }}
+                >
+                  Esqueci minha senha
+                </button>
+              )}
+            </div>
             <div className="relative">
               <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -211,7 +248,6 @@ export default function LoginPage() {
             {loading ? "Validando..." : (isRegistering ? "Criar Empresa na VEXO" : "Entrar no Sistema")}
           </Button>
 
-          {/* 3. O Botão Manual de Alternância */}
           <Button 
             type="button" 
             variant="ghost" 
