@@ -69,7 +69,11 @@ export const useAuthStore = create<AuthState>()(
         const cleanCpf = ownerCpf ? ownerCpf.replace(/\D/g, '') : cleanDoc;
         const u = username.toLowerCase().trim(); // E-mail Real do Dono
         
-        // 1. Cria o Workspace com os dados fiscais e plano
+        // Calcula exatamente 7 dias corridos a partir de agora
+        const trialEndDate = new Date();
+        trialEndDate.setDate(trialEndDate.getDate() + 7);
+        
+        // 1. Cria o Workspace com 7 Dias Grátis
         const { data: workspace, error: wErr } = await supabase
           .from('workspaces')
           .insert([{ 
@@ -77,7 +81,8 @@ export const useAuthStore = create<AuthState>()(
             nome_empresa: companyName,
             cpf_titular: cleanCpf,
             status_assinatura: 'trialing',
-            plano_atual: 'estoque_pro'
+            plano_atual: 'estoque_pro',
+            data_vencimento: trialEndDate.toISOString() // Grava o limite do teste!
           }])
           .select().single();
         if (wErr) throw wErr;
