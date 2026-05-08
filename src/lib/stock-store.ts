@@ -103,9 +103,30 @@ export const useStockStore = create<StockState>()(
             else if (qr.tipo === 'location') qrAliases[qr.chave] = { kind: 'location', locationId: qr.location_id };
           });
 
-          const orders = (pedRes.data || []).map(p => {
-             const ents = (entRes.data || []).filter(e => e.pedido_id === p.id).map(e => ({ id: e.id, date: e.data, quantity: Number(e.quantidade), stockEntryQuantity: Number(e.quantidade_estoque), notes: e.observacoes, createStockEntry: e.gerou_entrada_estoque }));
-             return { id: p.id, supplierId: p.fornecedor_id, linkedCategoryId: p.categoria_id, linkedItemId: p.produto_id, unit: p.unidade, quantityOrdered: Number(p.quantidade_pedida), quantityDelivered: Number(p.quantidade_entregue), expectedDate: p.data_esperada, deliveryDate: ents.length > 0 ? ents[0].date : undefined, deadlineStatus: p.status_prazo as any, deliveryStatus: p.status_entrega as any, notes: p.observacoes, stockEntryCreated: p.entrada_estoque_criada, stockEntryQuantity: Number(p.quantidade_estoque_gerada), deliveries: ents };
+         const orders = (pedRes.data ||[]).map(p => {
+             const ents = (entRes.data ||[]).filter(e => e.pedido_id === p.id).map(e => ({ id: e.id, date: e.data, quantity: Number(e.quantidade), stockEntryQuantity: Number(e.quantidade_estoque), notes: e.observacoes, createStockEntry: e.gerou_entrada_estoque }));
+             return { 
+               id: p.id, 
+               supplierId: p.fornecedor_id, 
+               linkedCategoryId: p.categoria_id, 
+               linkedItemId: p.produto_id, 
+               unit: p.unidade, 
+               quantityOrdered: Number(p.quantidade_pedida), 
+               quantityDelivered: Number(p.quantidade_entregue), 
+               expectedDate: p.data_esperada, 
+               deliveryDate: ents.length > 0 ? ents[0].date : undefined, 
+               deadlineStatus: p.status_prazo as any, 
+               deliveryStatus: p.status_entrega as any, 
+               notes: p.observacoes, 
+               stockEntryCreated: p.entrada_estoque_criada, 
+               stockEntryQuantity: Number(p.quantidade_estoque_gerada), 
+               deliveries: ents,
+               // NOVOS CAMPOS EXIGIDOS PELO LOVABLE PARA NÃO QUEBRAR A TELA:
+               productDescription: '', 
+               orderDate: p.criado_em || new Date().toISOString(), 
+               quantityReturned: 0, 
+               pricePerUnit: 0
+             };
           });
 
           let categories: Category[] = [];
@@ -283,7 +304,14 @@ export const useStockStore = create<StockState>()(
         await supabase.from('aliases_qr').delete().eq('chave', key).eq('workspace_id', useAuthStore.getState().workspaceId);
         await get().initialize();
       },
-    }),
-    { name: 'estoque-local-v3' }
+  }),
+    { 
+      name: 'estoque-local-v3',
+      // COFRE B2B: Não deixamos o navegador salvar a lista de produtos na máquina.
+      // Salvamos APENAS qual foi a última categoria que o usuário clicou na tela.
+      partialize: (state) => ({ 
+        selectedCategoryId: state.selectedCategoryId 
+      })
+    }
   )
 )

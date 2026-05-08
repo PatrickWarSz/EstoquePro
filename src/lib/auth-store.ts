@@ -52,6 +52,7 @@ interface AuthState {
   updateEmployee: (id: string, updates: Partial<Employee>) => void
   removeEmployee: (id: string) => void
   getCurrentUser: () => CurrentUser
+  fetchEmployees: () => Promise<void> // <- A nova ponte para o Lovable
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -64,8 +65,9 @@ export const useAuthStore = create<AuthState>()(
 
       setupAdmin: async ({ username, password, name, companyName, documentId }) => {
         const { supabase } = await import('./supabase');
-        const passwordHash = await hashPassword(password);
         const cleanDoc = documentId.replace(/\D/g, '');
+        const u = username.toLowerCase().trim();
+        const virtualEmail = `${u}@${cleanDoc}.vexo`; // E-mail virtual invisível
 
         // 1. Cria Workspace
         const { data: workspace, error: wErr } = await supabase
@@ -74,23 +76,31 @@ export const useAuthStore = create<AuthState>()(
           .select().single();
         if (wErr) throw wErr;
 
-        // 2. Cria Usuário Admin
+        // 2. Cria usuário no Supabase Auth (Segurança Nativa)
+        const { data: authData, error: authErr } = await supabase.auth.signUp({
+          email: virtualEmail,
+          password: password,
+        });
+        if (authErr) throw authErr;
+
+        // 3. Cria Usuário na nossa tabela com o ID real do Auth
         const { error: uErr } = await supabase
           .from('usuarios')
           .insert([{
+            id: authData.user?.id, // Sincroniza o ID
             workspace_id: workspace.id,
             nome: name,
-            username: username.toLowerCase(),
+            username: u,
             tipo: 'admin',
             permissoes: fullPermissions(),
             ativo: true,
-            senha_hash: passwordHash
+            senha_hash: 'migrated_to_auth' // Não guardamos mais a senha na mão!
           }]);
         if (uErr) throw uErr;
 
         set({
-          admin: { username, passwordHash, name, companyName },
-          currentUserId: "admin",
+          admin: { username: u, passwordHash: 'migrated', name, companyName },
+          currentUserId: authData.user?.id || "admin",
           workspaceId: workspace.id
         });
       },
@@ -98,67 +108,112 @@ export const useAuthStore = create<AuthState>()(
       login: async (username, password) => {
         const { supabase } = await import('./supabase');
         const u = username.trim().toLowerCase();
-        const hash = await hashPassword(password);
 
-        const { data: user, error } = await supabase
+        // 1. Acha o usuário na nossa tabela
+        const { data: user, error: dbErr } = await supabase
           .from('usuarios')
           .select('*')
           .eq('username', u)
           .single();
 
-        if (error || !user || user.senha_hash !== hash) {
+        if (dbErr || !user) {
           return { ok: false, error: "Usuário ou senha incorretos." };
         }
 
-        const { data: team } = await supabase
-          .from('usuarios')
-          .select('*')
-          .eq('workspace_id', user.workspace_id)
-          .eq('tipo', 'funcionario');
+        // 2. Busca o CNPJ do workspace para montar o E-mail Virtual
+        const { data: workspace } = await supabase
+          .from('workspaces')
+          .select('cnpj_cpf')
+          .eq('id', user.workspace_id)
+          .single();
 
-        const emps: Employee[] = (team || []).map(e => ({
-          id: e.id, username: e.username, passwordHash: e.senha_hash, name: e.nome, permissions: e.permissoes, active: e.ativo, createdAt: e.criado_em
-        }));
+        const cnpjCpf = workspace?.cnpj_cpf || '00000000000000';
+        const virtualEmail = `${u}@${cnpjCpf}.vexo`;
+
+        // 3. Faz o login Real e Seguro no Supabase Auth
+        const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
+          email: virtualEmail,
+          password: password,
+        });
+
+        if (authErr || !authData.user) {
+          return { ok: false, error: "Usuário ou senha incorretos." };
+        }
 
         set({
-          currentUserId: user.tipo === 'admin' ? 'admin' : user.id,
+          currentUserId: user.id,
           workspaceId: user.workspace_id,
-          admin: user.tipo === 'admin' ? { username: user.username, passwordHash: user.senha_hash, name: user.nome } : null,
-          employees: emps
+          admin: user.tipo === 'admin' ? { username: user.username, passwordHash: 'migrated', name: user.nome } : null,
+          employees:[] // Deixamos a lista vazia por padrão para o LocalStorage não salvar funcionários
         });
 
         return { ok: true };
       },
 
-      logout: () => set({ currentUserId: null, workspaceId: null, admin: null, employees: [] }),
+   logout: () => {
+        import('./supabase').then(({ supabase }) => {
+          supabase.auth.signOut().then(() => {
+            set({ currentUserId: null, workspaceId: null, admin: null, employees:[] });
+          });
+        });
+      },
 
       addEmployee: async ({ username, password, name, permissions }) => {
         const { supabase } = await import('./supabase');
-        const hash = await hashPassword(password);
+        const u = username.toLowerCase().trim();
+
+        // 1. Pega o CNPJ da empresa para o E-mail Virtual
+        const { data: workspace } = await supabase
+          .from('workspaces')
+          .select('cnpj_cpf')
+          .eq('id', get().workspaceId)
+          .single();
+
+        const cnpjCpf = workspace?.cnpj_cpf || '00000000000000';
+        const virtualEmail = `${u}@${cnpjCpf}.vexo`;
+
+        // 2. O PULO DO GATO: Cliente temporário para não deslogar o Admin
+        const { createClient } = await import('@supabase/supabase-js');
+        const tempClient = createClient(
+          import.meta.env.VITE_SUPABASE_URL,
+          import.meta.env.VITE_SUPABASE_ANON_KEY,
+          { auth: { persistSession: false } }
+        );
+
+        const { data: authData, error: authErr } = await tempClient.auth.signUp({
+          email: virtualEmail,
+          password: password,
+        });
+
+        if (authErr) return { ok: false, error: authErr.message };
+
+        // 3. Salva o funcionário na nossa tabela blindada (RLS) com o ID real
         const { data, error } = await supabase
           .from('usuarios')
           .insert([{
+            id: authData.user?.id,
             workspace_id: get().workspaceId,
             nome: name,
-            username: username.toLowerCase(),
+            username: u,
             tipo: 'funcionario',
             permissoes: permissions,
             ativo: true,
-            senha_hash: hash
+            senha_hash: 'migrated_to_auth'
           }])
           .select().single();
 
         if (error) return { ok: false, error: error.message };
 
+        // 4. Atualiza a tela do Lovable
         const newEmp: Employee = {
-          id: data.id, username: data.username, passwordHash: hash, name: data.nome, permissions: data.permissoes, active: data.ativo, createdAt: data.criado_em
+          id: data.id, username: data.username, passwordHash: 'migrated', name: data.nome, permissions: data.permissoes, active: data.ativo, createdAt: data.criado_em
         };
 
-        set({ employees: [...get().employees, newEmp] });
+        set({ employees:[...get().employees, newEmp] });
         return { ok: true, id: data.id };
       },
 
-      updateEmployee: async (id, updates) => {
+  updateEmployee: async (id, updates) => {
         const { supabase } = await import('./supabase');
         const dbUpdates: any = {};
         if (updates.name) dbUpdates.nome = updates.name;
@@ -171,17 +226,51 @@ export const useAuthStore = create<AuthState>()(
 
       removeEmployee: async (id) => {
         const { supabase } = await import('./supabase');
-        await supabase.from('usuarios').delete().eq('id', id);
-        set({ employees: get().employees.filter(e => e.id !== id) });
+        // B2B NUNCA deleta funcionário para não quebrar histórico, apenas INATIVA!
+        await supabase.from('usuarios').update({ ativo: false }).eq('id', id);
+        set({ employees: get().employees.map(e => e.id === id ? { ...e, active: false } : e) });
       },
 
       getCurrentUser: () => {
         const { admin, employees, currentUserId } = get();
-        if (currentUserId === 'admin' && admin) return { kind: 'admin', id: 'admin', ...admin, permissions: fullPermissions() };
+        if (admin) return { kind: 'admin', id: 'admin', ...admin, permissions: fullPermissions() };
         const emp = employees.find(e => e.id === currentUserId);
         return emp ? { kind: 'employee', ...emp } : null;
+      },
+
+      fetchEmployees: async () => {
+        const { supabase } = await import('./supabase');
+        const currentWorkspaceId = get().workspaceId;
+        if (!currentWorkspaceId) return;
+        
+        const { data } = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('workspace_id', currentWorkspaceId)
+          .eq('tipo', 'funcionario');
+          
+        if (data) {
+          const emps: Employee[] = data.map((e: any) => ({
+            id: e.id,
+            username: e.username,
+            passwordHash: 'migrated',
+            name: e.nome,
+            permissions: e.permissoes,
+            active: e.ativo,
+            createdAt: e.criado_em
+          }));
+          set({ employees: emps });
+        }
       }
     }),
-    { name: "estoque-auth-v1" }
+    { 
+      name: "estoque-auth-v1",
+      // O COFRE B2B: Só salvamos no computador do cliente os IDs. O resto puxamos do Supabase!
+      partialize: (state) => ({ 
+        currentUserId: state.currentUserId, 
+        workspaceId: state.workspaceId, 
+        admin: state.admin 
+      })
+    }
   )
 )
