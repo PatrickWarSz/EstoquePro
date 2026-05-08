@@ -23,12 +23,10 @@ const operacaoAll: NavItem[] = [
   { title: "Fornecedores", url: "/app/fornecedores", icon: Truck, module: "fornecedores" },
   { title: "Histórico", url: "/app/historico", icon: History, module: "historico" },
   { title: "Scanner QR", url: "/app/scanner", icon: ScanLine, module: "scanner" },
+  { title: "Etiquetas QR", url: "/app/etiquetas", icon: QrCode, module: "etiquetas" },
 ];
 
-const sistemaAll: NavItem[] = [
-  { title: "Etiquetas QR", url: "/app/etiquetas", icon: QrCode, module: "etiquetas" },
-  { title: "Configurações", url: "/app/configuracoes", icon: Settings, module: "configuracoes" },
-];
+// O sistemaAll foi removido para limpar a redundância
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -42,7 +40,6 @@ export function AppSidebar() {
   ).length;
 
   const operacao = operacaoAll.filter((i) => user?.permissions[i.module]);
-  const sistema = sistemaAll.filter((i) => user?.permissions[i.module]);
   const isAdmin = user?.kind === "admin";
 
   const linkBase =
@@ -88,28 +85,6 @@ export function AppSidebar() {
                           {pendingCount}
                         </span>
                       )}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup className="mt-4">
-          {!collapsed && (
-            <SidebarGroupLabel className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Sistema
-            </SidebarGroupLabel>
-          )}
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {sistema.map((item) => (
-                <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton asChild>
-                    <NavLink to={item.url} className={linkBase} activeClassName={linkActive}>
-                      <item.icon className="h-4 w-4 shrink-0" />
-                      {!collapsed && <span>{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

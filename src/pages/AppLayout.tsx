@@ -5,18 +5,21 @@ import { TopBar } from "@/components/layout/TopBar";
 import { PendingOrdersPanel } from "@/components/layout/PendingOrdersPanel";
 import { useEffect } from "react";
 import { useStockStore } from "@/lib/stock-store";
+import { useAuthStore } from "@/lib/auth-store";
 import { ScanLine } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function AppLayout() {
   const initialize = useStockStore((s) => s.initialize);
+  const fetchEmployees = useAuthStore((s) => s.fetchEmployees); // NOVA LINHA
   const location = useLocation();
   const onScanner = location.pathname.startsWith("/app/scanner");
   const isMobile = useIsMobile();
 
   useEffect(() => {
     initialize();
-  }, [initialize]);
+    fetchEmployees(); // AGORA A EQUIPE É CARREGADA DA NUVEM AO ABRIR O SISTEMA
+  }, [initialize, fetchEmployees]);
 
   return (
     <SidebarProvider defaultOpen={!isMobile}>

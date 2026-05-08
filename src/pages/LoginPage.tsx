@@ -54,18 +54,19 @@ function isValidDocument(doc: string) {
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const admin = useAuthStore((s) => s.admin)
+  // 1. Removemos o detector automático de admin
   const setupAdmin = useAuthStore((s) => s.setupAdmin)
   const login = useAuthStore((s) => s.login)
   const getCurrentUser = useAuthStore((s) => s.getCurrentUser)
 
   const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
+  const[password, setPassword] = useState("")
   const [documentId, setDocumentId] = useState("")
-  const [companyName, setCompanyName] = useState("")
+  const[companyName, setCompanyName] = useState("")
   const [loading, setLoading] = useState(false)
-
-  const isFirstSetup = !admin
+  
+  // 2. Criamos o estado manual de alternância
+  const[isRegistering, setIsRegistering] = useState(false)
 
   useEffect(() => {
     const user = getCurrentUser()
@@ -78,7 +79,7 @@ export default function LoginPage() {
       const fallback = order.find((m) => user.permissions[m])
       if (fallback) navigate(`/app/${fallback}`, { replace: true })
     }
-  }, [getCurrentUser, navigate])
+  },[getCurrentUser, navigate])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -90,7 +91,7 @@ export default function LoginPage() {
     setLoading(true)
     
     try {
-      if (isFirstSetup) {
+      if (isRegistering) {
         if (!isValidDocument(documentId)) {
           toast.error("CPF ou CNPJ inválido.")
           setLoading(false)
@@ -139,12 +140,12 @@ export default function LoginPage() {
             {'>'} V E X O {'<'}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {isFirstSetup ? "Inicie seu Workspace profissional" : "Painel de Acesso Seguro"}
+            {isRegistering ? "Inicie seu Workspace profissional" : "Painel de Acesso Seguro"}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {isFirstSetup && (
+          {isRegistering && (
             <>
               <div className="space-y-2">
                 <Label htmlFor="company">Nome da Empresa / Marca</Label>
@@ -207,11 +208,20 @@ export default function LoginPage() {
           </div>
 
           <Button type="submit" className="w-full h-11 text-md font-bold mt-2" disabled={loading}>
-            {loading ? "Validando..." : (isFirstSetup ? "Criar Empresa na VEXO" : "Entrar no Sistema")}
+            {loading ? "Validando..." : (isRegistering ? "Criar Empresa na VEXO" : "Entrar no Sistema")}
+          </Button>
+
+          {/* 3. O Botão Manual de Alternância */}
+          <Button 
+            type="button" 
+            variant="ghost" 
+            className="w-full h-11 text-sm mt-2 text-muted-foreground hover:text-primary"
+            onClick={() => setIsRegistering(!isRegistering)}
+          >
+            {isRegistering ? "Já tem conta? Entrar no Sistema" : "Não tem conta? Criar Empresa"}
           </Button>
         </form>
 
-        {/* --- RODAPÉ JURÍDICO / LGPD --- */}
         <p className="mt-8 text-center text-[10px] uppercase tracking-widest text-muted-foreground/60 px-4 leading-relaxed">
           Ao continuar, você concorda com os <br />
           <a href="#" className="underline hover:text-primary transition-colors">Termos de Serviço</a> e com a <a href="#" className="underline hover:text-primary transition-colors">Política de Privacidade</a> da V E X O.

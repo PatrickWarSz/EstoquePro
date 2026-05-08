@@ -1,4 +1,4 @@
-import { History as HistoryIcon, Download, ArrowDown, ArrowUp } from "lucide-react";
+import { History as HistoryIcon, ArrowDown, ArrowUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useStockStore } from "@/lib/stock-store";
 import { useMemo } from "react";

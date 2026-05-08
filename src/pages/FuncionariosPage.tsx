@@ -155,7 +155,8 @@ export default function FuncionariosPage() {
   const inviteText = useMemo(() => {
     if (!credentialsModal) return ""
     const url = `${window.location.origin}/login`
-    return `Olá ${credentialsModal.name}! Suas credenciais de acesso ao Estoque Pro:\n\nLink: ${url}\nUsuário: ${credentialsModal.username}\nSenha: ${credentialsModal.password}\n\nGuarde com segurança.`
+    // Ajustado para o link ficar em sua própria linha, garantindo que seja clicável no WhatsApp
+    return `Olá ${credentialsModal.name}! 👋\n\nAqui estão suas credenciais de acesso ao Estoque Pro:\n\nLink de acesso:\n${url}\n\nUsuário: ${credentialsModal.username}\nSenha: ${credentialsModal.password}\n\nGuarde com segurança.`
   }, [credentialsModal])
 
   return (

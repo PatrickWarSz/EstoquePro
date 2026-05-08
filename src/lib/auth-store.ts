@@ -1,7 +1,11 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { toast } from "sonner"
 
 export type ModuleKey = "estoque" | "pedidos" | "fornecedores" | "historico" | "scanner" | "etiquetas" | "configuracoes"
+
+// Definição do tipo Permissions que a FuncionariosPage estava pedindo
+export type Permissions = Record<ModuleKey, boolean>;
 
 export const ALL_MODULES: { key: ModuleKey; label: string; description: string }[] =[
   { key: "estoque", label: "Estoque", description: "Visualizar e movimentar itens" },
@@ -13,16 +17,16 @@ export const ALL_MODULES: { key: ModuleKey; label: string; description: string }
   { key: "configuracoes", label: "Configurações", description: "Ajustes do sistema" },
 ]
 
-export const emptyPermissions = () => ({
+export const emptyPermissions = (): Permissions => ({
   estoque: false, pedidos: false, fornecedores: false, historico: false, scanner: false, etiquetas: false, configuracoes: false,
 })
 
-export const fullPermissions = () => ({
+export const fullPermissions = (): Permissions => ({
   estoque: true, pedidos: true, fornecedores: true, historico: true, scanner: true, etiquetas: true, configuracoes: true,
 })
 
 export interface Employee {
-  id: string; username: string; passwordHash: string; name: string; permissions: any; active: boolean; createdAt: string;
+  id: string; username: string; passwordHash: string; name: string; permissions: Permissions; active: boolean; createdAt: string;
 }
 
 export interface AdminAccount {
@@ -30,15 +34,9 @@ export interface AdminAccount {
 }
 
 export type CurrentUser =
-  | { kind: "admin"; id: "admin"; name: string; username: string; permissions: any }
-  | { kind: "employee"; id: string; name: string; username: string; permissions: any }
+  | { kind: "admin"; id: "admin"; name: string; username: string; permissions: Permissions }
+  | { kind: "employee"; id: string; name: string; username: string; permissions: Permissions }
   | null
-
-export async function hashPassword(password: string): Promise<string> {
-  const enc = new TextEncoder().encode(password)
-  const buf = await crypto.subtle.digest("SHA-256", enc)
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("")
-}
 
 interface AuthState {
   admin: AdminAccount | null
@@ -51,8 +49,9 @@ interface AuthState {
   addEmployee: (input: { username: string; password: string; name: string; permissions: any }) => Promise<{ ok: boolean; id?: string; error?: string }>
   updateEmployee: (id: string, updates: Partial<Employee>) => void
   removeEmployee: (id: string) => void
+  resetEmployeePassword: (id: string, newPassword: string) => Promise<void>
   getCurrentUser: () => CurrentUser
-  fetchEmployees: () => Promise<void> // <- A nova ponte para o Lovable
+  fetchEmployees: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -67,34 +66,31 @@ export const useAuthStore = create<AuthState>()(
         const { supabase } = await import('./supabase');
         const cleanDoc = documentId.replace(/\D/g, '');
         const u = username.toLowerCase().trim();
-        const virtualEmail = `${u}@${cleanDoc}.vexo`; // E-mail virtual invisível
+        const virtualEmail = `${u}@${cleanDoc}.vexo`;
 
-        // 1. Cria Workspace
         const { data: workspace, error: wErr } = await supabase
           .from('workspaces')
           .insert([{ cnpj_cpf: cleanDoc, nome_empresa: companyName }])
           .select().single();
         if (wErr) throw wErr;
 
-        // 2. Cria usuário no Supabase Auth (Segurança Nativa)
         const { data: authData, error: authErr } = await supabase.auth.signUp({
           email: virtualEmail,
           password: password,
         });
         if (authErr) throw authErr;
 
-        // 3. Cria Usuário na nossa tabela com o ID real do Auth
         const { error: uErr } = await supabase
           .from('usuarios')
           .insert([{
-            id: authData.user?.id, // Sincroniza o ID
+            id: authData.user?.id,
             workspace_id: workspace.id,
             nome: name,
             username: u,
             tipo: 'admin',
             permissoes: fullPermissions(),
             ativo: true,
-            senha_hash: 'migrated_to_auth' // Não guardamos mais a senha na mão!
+            senha_hash: 'migrated_to_auth'
           }]);
         if (uErr) throw uErr;
 
@@ -109,7 +105,6 @@ export const useAuthStore = create<AuthState>()(
         const { supabase } = await import('./supabase');
         const u = username.trim().toLowerCase();
 
-        // 1. Acha o usuário na nossa tabela
         const { data: user, error: dbErr } = await supabase
           .from('usuarios')
           .select('*')
@@ -120,7 +115,6 @@ export const useAuthStore = create<AuthState>()(
           return { ok: false, error: "Usuário ou senha incorretos." };
         }
 
-        // 2. Busca o CNPJ do workspace para montar o E-mail Virtual
         const { data: workspace } = await supabase
           .from('workspaces')
           .select('cnpj_cpf')
@@ -130,7 +124,6 @@ export const useAuthStore = create<AuthState>()(
         const cnpjCpf = workspace?.cnpj_cpf || '00000000000000';
         const virtualEmail = `${u}@${cnpjCpf}.vexo`;
 
-        // 3. Faz o login Real e Seguro no Supabase Auth
         const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
           email: virtualEmail,
           password: password,
@@ -144,16 +137,16 @@ export const useAuthStore = create<AuthState>()(
           currentUserId: user.id,
           workspaceId: user.workspace_id,
           admin: user.tipo === 'admin' ? { username: user.username, passwordHash: 'migrated', name: user.nome } : null,
-          employees:[] // Deixamos a lista vazia por padrão para o LocalStorage não salvar funcionários
+          employees: []
         });
 
         return { ok: true };
       },
 
-   logout: () => {
+      logout: () => {
         import('./supabase').then(({ supabase }) => {
           supabase.auth.signOut().then(() => {
-            set({ currentUserId: null, workspaceId: null, admin: null, employees:[] });
+            set({ currentUserId: null, workspaceId: null, admin: null, employees: [] });
           });
         });
       },
@@ -162,7 +155,6 @@ export const useAuthStore = create<AuthState>()(
         const { supabase } = await import('./supabase');
         const u = username.toLowerCase().trim();
 
-        // 1. Pega o CNPJ da empresa para o E-mail Virtual
         const { data: workspace } = await supabase
           .from('workspaces')
           .select('cnpj_cpf')
@@ -172,7 +164,6 @@ export const useAuthStore = create<AuthState>()(
         const cnpjCpf = workspace?.cnpj_cpf || '00000000000000';
         const virtualEmail = `${u}@${cnpjCpf}.vexo`;
 
-        // 2. O PULO DO GATO: Cliente temporário para não deslogar o Admin
         const { createClient } = await import('@supabase/supabase-js');
         const tempClient = createClient(
           import.meta.env.VITE_SUPABASE_URL,
@@ -187,7 +178,6 @@ export const useAuthStore = create<AuthState>()(
 
         if (authErr) return { ok: false, error: authErr.message };
 
-        // 3. Salva o funcionário na nossa tabela blindada (RLS) com o ID real
         const { data, error } = await supabase
           .from('usuarios')
           .insert([{
@@ -204,16 +194,15 @@ export const useAuthStore = create<AuthState>()(
 
         if (error) return { ok: false, error: error.message };
 
-        // 4. Atualiza a tela do Lovable
         const newEmp: Employee = {
           id: data.id, username: data.username, passwordHash: 'migrated', name: data.nome, permissions: data.permissoes, active: data.ativo, createdAt: data.criado_em
         };
 
-        set({ employees:[...get().employees, newEmp] });
+        set({ employees: [...get().employees, newEmp] });
         return { ok: true, id: data.id };
       },
 
-  updateEmployee: async (id, updates) => {
+      updateEmployee: async (id, updates) => {
         const { supabase } = await import('./supabase');
         const dbUpdates: any = {};
         if (updates.name) dbUpdates.nome = updates.name;
@@ -226,9 +215,15 @@ export const useAuthStore = create<AuthState>()(
 
       removeEmployee: async (id) => {
         const { supabase } = await import('./supabase');
-        // B2B NUNCA deleta funcionário para não quebrar histórico, apenas INATIVA!
         await supabase.from('usuarios').update({ ativo: false }).eq('id', id);
         set({ employees: get().employees.map(e => e.id === id ? { ...e, active: false } : e) });
+      },
+
+      resetEmployeePassword: async (id, newPassword) => {
+        // Nota: O reset de senha de terceiros via Client SDK é restrito por segurança no Supabase.
+        // O ideal é usar Edge Functions. Por enquanto, apenas notificamos o Admin.
+        toast.info("Para resetar a senha deste funcionário, use o painel administrativo do Supabase ou configure uma Edge Function.");
+        console.log(`Solicitação de reset para ID: ${id} com nova senha: ${newPassword}`);
       },
 
       getCurrentUser: () => {
@@ -265,7 +260,6 @@ export const useAuthStore = create<AuthState>()(
     }),
     { 
       name: "estoque-auth-v1",
-      // O COFRE B2B: Só salvamos no computador do cliente os IDs. O resto puxamos do Supabase!
       partialize: (state) => ({ 
         currentUserId: state.currentUserId, 
         workspaceId: state.workspaceId, 
