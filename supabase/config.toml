@@ -439,3 +439,25 @@ entrypoint = "./functions/asaas-webhook/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/asaas-webhook/*.html" ]
+
+[functions.asaas-cancel-sub]
+enabled = true
+verify_jwt = true
+import_map = "./functions/asaas-cancel-sub/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/asaas-cancel-sub/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/asaas-cancel-sub/*.html" ]
+
+[functions.asaas-upgrade-sub]
+enabled = true
+verify_jwt = true
+import_map = "./functions/asaas-upgrade-sub/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/asaas-upgrade-sub/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/asaas-upgrade-sub/*.html" ]

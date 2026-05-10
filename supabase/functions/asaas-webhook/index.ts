@@ -3,50 +3,57 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0"
 
 serve(async (req) => {
   try {
+    // A BLINDAGEM: Verifica se o aviso veio realmente do Asaas usando o Token de Segurança
+    const asaasToken = req.headers.get('asaas-access-token')
+    const mySecretToken = Deno.env.get('ASAAS_WEBHOOK_TOKEN')
+
+    if (!asaasToken || asaasToken !== mySecretToken) {
+      console.error("Tentativa de fraude bloqueada: Token inválido.")
+      return new Response("Unauthorized", { status: 401 })
+    }
+
     const body = await req.json()
-    const event = body.event // Ex: PAYMENT_RECEIVED, PAYMENT_CONFIRMED
-    const payment = body.payment // Dados do pagamento
+    const event = body.event
+    const payment = body.payment
 
-    console.log(`Webhook recebido: Evento ${event} para o cliente ${payment.customer}`)
+    console.log(`Webhook: ${event} | Cliente: ${payment.customer}`)
 
-    // 1. Configura o Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
     const supabase = createClient(supabaseUrl!, supabaseKey!)
 
-    // 2. Filtramos apenas eventos de PAGAMENTO CONFIRMADO
-    if (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED') {
-      
-      // Buscamos qual empresa (workspace) tem esse ID de cliente do Asaas
-      const { data: workspace, error: wErr } = await supabase
-        .from('workspaces')
-        .select('id, plano_atual')
-        .eq('asaas_customer_id', payment.customer)
-        .single()
+    const { data: workspace } = await supabase
+      .from('workspaces')
+      .select('id, plano_atual')
+      .eq('asaas_customer_id', payment.customer)
+      .single()
 
-      if (workspace) {
-        // A MÁGICA: Ativamos a assinatura e renovamos a data de vencimento
-        // O Asaas manda o campo 'dueDate'. Vamos colocar o vencimento para 32 dias após o pagamento (margem de segurança)
+    if (workspace) {
+      // 1. PAGAMENTO CONFIRMADO
+      if (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED') {
+        const isAnnual = workspace.plano_atual === 'anual' || payment.description?.toLowerCase().includes('anual');
         const nextDate = new Date();
-        nextDate.setDate(nextDate.getDate() + 31);
+        nextDate.setDate(nextDate.getDate() + (isAnnual ? 370 : 32));
 
-        await supabase
-          .from('workspaces')
-          .update({ 
-            status_assinatura: 'active',
-            data_vencimento: nextDate.toISOString()
-          })
-          .eq('id', workspace.id)
-
-        console.log(`Sucesso: Empresa ${workspace.id} ativada até ${nextDate.toLocaleDateString()}`)
+        await supabase.from('workspaces').update({ 
+          status_assinatura: 'active',
+          data_vencimento: nextDate.toISOString()
+        }).eq('id', workspace.id)
+      }
+      // 2. PAGAMENTO ATRASADO
+      else if (event === 'PAYMENT_OVERDUE') {
+        await supabase.from('workspaces').update({ status_assinatura: 'past_due' }).eq('id', workspace.id)
+      }
+      // 3. ESTORNO/CHARGEBACK (Fraude)
+      else if (event === 'PAYMENT_REFUNDED' || event === 'PAYMENT_CHARGEBACK_REQUESTED') {
+        await supabase.from('workspaces').update({ 
+          status_assinatura: 'canceled',
+          data_vencimento: new Date().toISOString()
+        }).eq('id', workspace.id)
       }
     }
 
-    // 3. Respondemos 200 OK para o Asaas não ficar tentando reenviar
-    return new Response(JSON.stringify({ received: true }), { 
-      headers: { 'Content-Type': 'application/json' },
-      status: 200 
-    })
+    return new Response(JSON.stringify({ received: true }), { status: 200 })
 
   } catch (error: any) {
     console.error("Erro no Webhook:", error.message)

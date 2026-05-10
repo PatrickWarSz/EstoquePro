@@ -24,7 +24,7 @@ serve(async (req) => {
     if (!asaasApiKey) throw new Error("Chave do Asaas não configurada no servidor.")
 
     // 3. Bate na API do Asaas (Criar Cliente)
-   const asaasRes = await fetch('https://sandbox.asaas.com/api/v3/customers', {
+    const asaasRes = await fetch('https://sandbox.asaas.com/api/v3/customers', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -34,7 +34,8 @@ serve(async (req) => {
         name: companyName,
         cpfCnpj: documentId,
         email: email,
-        notificationDisabled: true // Para a VEXO mandar as notificações depois
+        mobilePhone: phone,
+        notificationDisabled: false
       })
     })
 
@@ -46,18 +47,24 @@ serve(async (req) => {
     }
 
     const customerId = asaasData.id // Ex: cus_000001234
+    
+    // Pega o link seguro que o Asaas gera automaticamente para cada cliente gerenciar a própria vida
+    const portalUrl = asaasData.invoiceUrl || `https://sandbox.asaas.com/c/${customerId}`;
 
-    // 4. Salva o ID do Asaas no nosso banco de dados (Workspaces)
+    // 4. Salva o ID e a URL do Portal no nosso banco de dados (Workspaces)
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!)
     const { error: dbErr } = await supabase
       .from('workspaces')
-      .update({ asaas_customer_id: customerId })
+      .update({ 
+        asaas_customer_id: customerId,
+        asaas_portal_url: portalUrl 
+      })
       .eq('id', workspaceId)
 
     if (dbErr) throw dbErr
 
     // 5. Devolve o sucesso para a tela
-    return new Response(JSON.stringify({ success: true, customerId }), {
+    return new Response(JSON.stringify({ success: true, customerId, portalUrl }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
