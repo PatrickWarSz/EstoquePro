@@ -31,7 +31,7 @@ serve(async (req) => {
     }
 
     // 2. Manda a ordem de exclusão para o Asaas
-    const asaasRes = await fetch(`https://sandbox.asaas.com/api/v3/subscriptions/${workspace.asaas_subscription_id}`, {
+    const asaasRes = await fetch(`https://api.asaas.com/api/v3/subscriptions/`, {
       method: 'DELETE',
       headers: { 'access_token': asaasApiKey! }
     })
