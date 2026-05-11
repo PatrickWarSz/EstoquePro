@@ -196,19 +196,21 @@ export default function LoginPage() {
             </>
           )}
 
-          <div className="space-y-2">
-                <Label htmlFor="phone">WhatsApp / Celular do Financeiro</Label>
-                <div className="relative">
-                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="phone"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="(11) 99999-9999"
-                    className="pl-10 h-11"
-                  />
-                </div>
-              </div>
+{isRegistering && (
+  <div className="space-y-2">
+    <Label htmlFor="phone">WhatsApp / Celular do Financeiro</Label>
+    <div className="relative">
+      <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        id="phone"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        placeholder="(11) 99999-9999"
+        className="pl-10 h-11"
+      />
+    </div>
+  </div>
+)}
 
           <div className="space-y-2">
             <Label htmlFor="username">{isRegistering ? "E-mail Profissional (Para Login e Faturas)" : "E-mail ou Usuário de Acesso"}</Label>

@@ -256,7 +256,26 @@ export const useStockStore = create<StockState>()(
         await get().initialize();
       },
 
-      updateDelivery: async () => { /* Bloqueado no SaaS */ },
+      updateDelivery: async ({ orderId, deliveryDate, quantityDelivered, stockEntryQuantity, notes, createStockEntry, linkedCategoryId, linkedItemId }) => {
+  const { supabase } = await import('./supabase');
+  const wId = useAuthStore.getState().workspaceId;
+  const state = get();
+  const order = state.orders.find(o => o.id === orderId);
+  if (!order) return;
+
+  const totalDel = quantityDelivered;
+  
+  await supabase.from('pedidos').update({
+    quantidade_entregue: totalDel,
+    status_prazo: calcDeadlineStatus(order.expectedDate, deliveryDate),
+    status_entrega: calcDeliveryStatus(order.quantityOrdered, totalDel),
+    entrada_estoque_criada: createStockEntry || order.stockEntryCreated,
+    quantidade_estoque_gerada: stockEntryQuantity || order.stockEntryQuantity,
+    observacoes: notes || order.notes
+  }).eq('id', orderId).eq('workspace_id', wId);
+
+  await get().initialize();
+},
 
       finalizeOrder: async (id) => {
         const { supabase } = await import('./supabase');
