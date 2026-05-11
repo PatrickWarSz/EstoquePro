@@ -51,7 +51,7 @@ serve(async (req) => {
     const today = new Date().toISOString().split('T')[0]
 
     // 6. Chamada ao Asaas (Sandbox)
-    const subRes = await fetch('https://sandbox.asaas.com/api/v3/subscriptions', {
+    const subRes = await fetch('https://api.asaas.com/api/v3/subscriptions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -73,7 +73,7 @@ serve(async (req) => {
     // 7. Salva a assinatura e busca o link
     await supabase.from('workspaces').update({ asaas_subscription_id: subData.id }).eq('id', workspaceId)
 
-    const payRes = await fetch(`https://sandbox.asaas.com/api/v3/payments?subscription=${subData.id}`, {
+    const payRes = await fetch(`https://api.asaas.com/api/v3/payments`, {
       headers: { 'access_token': asaasApiKey }
     })
     const payData = await payRes.json()

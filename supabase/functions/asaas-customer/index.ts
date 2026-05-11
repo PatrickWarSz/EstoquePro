@@ -14,7 +14,7 @@ serve(async (req) => {
 
   try {
     // 1. Recebe os dados do Frontend
-    const { workspaceId, companyName, documentId, email } = await req.json()
+   const { workspaceId, companyName, documentId, email, phone } = await req.json()
 
     // 2. Pega as chaves secretas do Cofre do Supabase
     const asaasApiKey = Deno.env.get('ASAAS_API_KEY')
@@ -24,7 +24,7 @@ serve(async (req) => {
     if (!asaasApiKey) throw new Error("Chave do Asaas não configurada no servidor.")
 
     // 3. Bate na API do Asaas (Criar Cliente)
-    const asaasRes = await fetch('https://sandbox.asaas.com/api/v3/customers', {
+    const asaasRes = await fetch('https://api.asaas.com/api/v3/customers', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
