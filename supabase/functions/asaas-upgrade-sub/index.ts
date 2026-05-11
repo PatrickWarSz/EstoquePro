@@ -35,7 +35,7 @@ serve(async (req) => {
 
     // 2. Avisa o Asaas para alterar a assinatura existente (PUT)
     // O Asaas vai gerar a cobrança da diferença e manter o mesmo cartão/método de pagamento
-    const asaasRes = await fetch(`https://sandbox.asaas.com/api/v3/subscriptions/${workspace.asaas_subscription_id}`, {
+    const asaasRes = await fetch(`https://api.asaas.com/api/v3/subscriptions/${workspace.asaas_subscription_id}`, {
       method: 'POST', // O Asaas usa POST mesmo para atualização em alguns endpoints, mas com o ID na URL
       headers: {
         'Content-Type': 'application/json',

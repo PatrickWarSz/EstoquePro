@@ -49,7 +49,7 @@ serve(async (req) => {
     const customerId = asaasData.id // Ex: cus_000001234
     
     // Pega o link seguro que o Asaas gera automaticamente para cada cliente gerenciar a própria vida
-    const portalUrl = asaasData.invoiceUrl || `https://sandbox.asaas.com/c/${customerId}`;
+    const portalUrl = asaasData.invoiceUrl || `https://api.asaas.com/api/v3/customers'
 
     // 4. Salva o ID e a URL do Portal no nosso banco de dados (Workspaces)
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!)
