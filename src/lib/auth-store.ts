@@ -155,14 +155,14 @@ export const useAuthStore = create<AuthState>()(
 
         const ws = user.workspaces as any;
         set({
-          currentUserId: user.id,
-          workspaceId: user.workspace_id,
-          subscriptionStatus: ws?.status_assinatura || 'trialing',
-          expiryDate: ws?.data_vencimento || null,
-          asaasPortalUrl: ws?.asaas_portal_url || null, // NOVA LINHA: Salva o portal
-          admin: user.tipo === 'admin' ? { username: user.username, passwordHash: 'migrated', name: user.nome } : null,
-          employees:[]
-        });
+  currentUserId: user.tipo === 'admin' ? 'admin' : user.id,
+  workspaceId: user.workspace_id,
+  subscriptionStatus: ws?.status_assinatura || 'trialing',
+  expiryDate: ws?.data_vencimento || null,
+  asaasPortalUrl: ws?.asaas_portal_url || null,
+  admin: user.tipo === 'admin' ? { username: user.username, passwordHash: 'migrated', name: user.nome } : null,
+  employees: []
+});
 
         return { ok: true };
       },
@@ -247,11 +247,14 @@ export const useAuthStore = create<AuthState>()(
       },
 
       getCurrentUser: () => {
-        const { admin, employees, currentUserId } = get();
-        if (admin) return { kind: 'admin', id: 'admin', ...admin, permissions: fullPermissions() };
-        const emp = employees.find(e => e.id === currentUserId);
-        return emp ? { kind: 'employee', ...emp } : null;
-      },
+  const { admin, employees, currentUserId } = get();
+  if (currentUserId === 'admin' && admin) return { kind: 'admin', id: 'admin', ...admin, permissions: fullPermissions() };
+  if (currentUserId && currentUserId !== 'admin') {
+    const emp = employees.find(e => e.id === currentUserId);
+    return emp ? { kind: 'employee', ...emp } : null;
+  }
+  return null;
+},
 
       fetchEmployees: async () => {
         const { supabase } = await import('./supabase');
@@ -271,7 +274,8 @@ export const useAuthStore = create<AuthState>()(
         admin: state.admin,
         subscriptionStatus: state.subscriptionStatus,
         expiryDate: state.expiryDate,
-        asaasPortalUrl: state.asaasPortalUrl // NOVA LINHA: Guarda a URL localmente
+        asaasPortalUrl: state.asaasPortalUrl,
+        employees: state.employees
       })
     }
   )
