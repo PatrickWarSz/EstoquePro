@@ -122,10 +122,10 @@ export const useStockStore = create<StockState>()(
                stockEntryQuantity: Number(p.quantidade_estoque_gerada), 
                deliveries: ents,
                // NOVOS CAMPOS EXIGIDOS PELO LOVABLE PARA NÃO QUEBRAR A TELA:
-               productDescription: '', 
-               orderDate: p.criado_em || new Date().toISOString(), 
-               quantityReturned: 0, 
-               pricePerUnit: 0
+               productDescription: p.descricao || p.produto_id || 'Pedido sem descrição',
+orderDate: p.criado_em || new Date().toISOString(), 
+quantityReturned: 0, 
+pricePerUnit: 0
              };
           });
 
@@ -221,15 +221,28 @@ export const useStockStore = create<StockState>()(
       addOrder: async (o) => {
         const { supabase } = await import('./supabase');
         const wId = useAuthStore.getState().workspaceId;
-        await supabase.from('pedidos').insert([{ workspace_id: wId, fornecedor_id: o.supplierId, produto_id: o.linkedItemId, categoria_id: o.linkedCategoryId, unidade: o.unit, quantidade_pedida: o.quantityOrdered, data_esperada: o.expectedDate, status_prazo: o.deadlineStatus, status_entrega: o.deliveryStatus, observacoes: o.notes }]);
+        await supabase.from('pedidos').insert([{ 
+  workspace_id: wId, 
+  fornecedor_id: o.supplierId, 
+  produto_id: o.linkedItemId, 
+  categoria_id: o.linkedCategoryId, 
+  unidade: o.unit, 
+  quantidade_pedida: o.quantityOrdered, 
+  data_esperada: o.expectedDate, 
+  status_prazo: o.deadlineStatus, 
+  status_entrega: o.deliveryStatus, 
+  observacoes: o.notes,
+  descricao: o.productDescription
+}]);
         await get().initialize();
       },
 
       updateOrder: async (id, up) => {
         const { supabase } = await import('./supabase');
-        const dbUp: any = {};
-        if (up.expectedDate) dbUp.data_esperada = up.expectedDate;
-        if (up.notes) dbUp.observacoes = up.notes;
+       const dbUp: any = {};
+if (up.expectedDate) dbUp.data_esperada = up.expectedDate;
+if (up.notes) dbUp.observacoes = up.notes;
+if (up.productDescription) dbUp.descricao = up.productDescription;
         await supabase.from('pedidos').update(dbUp).eq('id', id).eq('workspace_id', useAuthStore.getState().workspaceId);
         await get().initialize();
       },
