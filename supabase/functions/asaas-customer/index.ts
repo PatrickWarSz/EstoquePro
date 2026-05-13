@@ -7,24 +7,24 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Ignora a requisição de pré-checagem (CORS) do navegador
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // 1. Recebe os dados do Frontend
-   const { workspaceId, companyName, documentId, email, phone } = await req.json()
+    const bodyText = await req.text()
+    if (!bodyText) throw new Error("Corpo da requisição vazio.")
+    const { workspaceId, companyName, documentId, email, phone } = JSON.parse(bodyText)
 
-    // 2. Pega as chaves secretas do Cofre do Supabase
+    console.log(`Criando cliente Asaas para workspace: ${workspaceId}`)
+
     const asaasApiKey = Deno.env.get('ASAAS_API_KEY')
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-    if (!asaasApiKey) throw new Error("Chave do Asaas não configurada no servidor.")
+    if (!asaasApiKey) throw new Error("Chave do Asaas não configurada.")
 
-    // 3. Bate na API do Asaas (Criar Cliente)
-    const asaasRes = await fetch('https://api.asaas.com/api/v3/customers', {
+    const asaasRes = await fetch('https://api.asaas.com/v3/customers', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -40,18 +40,15 @@ serve(async (req) => {
     })
 
     const asaasData = await asaasRes.json()
+    console.log("Resposta Asaas:", JSON.stringify(asaasData))
 
     if (!asaasRes.ok) {
-      console.error("Erro Asaas:", asaasData)
       throw new Error(asaasData.errors?.[0]?.description || 'Erro ao criar cliente no Asaas')
     }
 
-    const customerId = asaasData.id // Ex: cus_000001234
-    
-    // Pega o link seguro que o Asaas gera automaticamente para cada cliente gerenciar a própria vida
-    const portalUrl = asaasData.invoiceUrl || `https://api.asaas.com/api/v3/customers'
+    const customerId = asaasData.id
+    const portalUrl = `https://www.asaas.com/c/${customerId}`
 
-    // 4. Salva o ID e a URL do Portal no nosso banco de dados (Workspaces)
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!)
     const { error: dbErr } = await supabase
       .from('workspaces')
@@ -63,13 +60,13 @@ serve(async (req) => {
 
     if (dbErr) throw dbErr
 
-    // 5. Devolve o sucesso para a tela
     return new Response(JSON.stringify({ success: true, customerId, portalUrl }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
 
   } catch (error: any) {
+    console.error("Erro Fatal:", error.message)
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
