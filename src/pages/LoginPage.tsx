@@ -200,6 +200,13 @@ navigate("/login", { replace: true })
                     className="pl-10 h-11"
                   />
                 </div>
+
+                {isRegistering && documentId.length > 0 && (
+  <p className={`text-xs mt-1 ${isValidDocument(documentId.replace(/\D/g, '')) ? 'text-success' : 'text-destructive'}`}>
+    {isValidDocument(documentId.replace(/\D/g, '')) ? '✓ Documento válido' : '✗ Documento inválido'}
+  </p>
+)}
+
               </div>
             </>
           )}

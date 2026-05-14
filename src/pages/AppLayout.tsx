@@ -23,10 +23,16 @@ export default function AppLayout() {
   const isMobile = useIsMobile();
 
   useEffect(() => {
+  if (initialize) initialize();
+  if (fetchEmployees) fetchEmployees();
+  if (typeof refreshSubscription === 'function') refreshSubscription();
+
+  const interval = setInterval(() => {
     if (initialize) initialize();
-    if (fetchEmployees) fetchEmployees();
-    if (typeof refreshSubscription === 'function') refreshSubscription();
-  }, [initialize, fetchEmployees, refreshSubscription]);
+  }, 30000)
+
+  return () => clearInterval(interval)
+}, [])
 
   // LÓGICA DO KILL SWITCH BLINDADA (Trial e Assinantes)
   const isExpired = () => {
@@ -99,7 +105,7 @@ export default function AppLayout() {
       <div className="flex min-h-[100svh] w-full bg-background">
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          
+
           {subscriptionStatus === 'trialing' && !locked && !isConfigPage && (() => {
   const days = expiryDate ? Math.ceil((new Date(expiryDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0
   return days <= 5 && days > 0 ? (

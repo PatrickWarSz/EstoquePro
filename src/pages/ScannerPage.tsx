@@ -84,12 +84,13 @@ export default function ScannerPage() {
   useEffect(() => { continuousRef.current = continuous }, [continuous])
 
   const {
-    categories,
-    locations,
-    updateItemQuantity,
-    qrAliases,
-    setQrAlias,
-  } = useStockStore()
+  categories,
+  locations,
+  updateItemQuantity,
+  qrAliases,
+  setQrAlias,
+  initialize,
+} = useStockStore()
 
   const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null)
   const [movementType, setMovementType] = useState<"entrada" | "saida">("saida")
@@ -303,11 +304,11 @@ export default function ScannerPage() {
   }
 
   useEffect(() => {
-    return () => {
-      stopScanner()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  initialize()
+  return () => {
+    stopScanner()
+  }
+}, [])
 
   const closeSheet = () => {
     setSelectedItem(null)
