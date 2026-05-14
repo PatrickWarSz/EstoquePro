@@ -139,6 +139,7 @@ export const useAuthStore = create<AuthState>()(
           .single();
 
         if (dbErr || !user) return { ok: false, error: "Usuário/E-mail ou senha incorretos." };
+if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o administrador." };
 
         let loginEmail = u;
         if (user.tipo === 'funcionario') {

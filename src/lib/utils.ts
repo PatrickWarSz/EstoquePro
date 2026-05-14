@@ -12,19 +12,29 @@ export function generateDeliveryMessage(
   linkedItemUnit?: string,
 ): string {
   const formatDate = (dateStr: string | undefined) => {
-    if (!dateStr) return "—";
-    return new Date(dateStr).toLocaleDateString("pt-BR");
-  };
-  return `📦 *CHEGADA DE PEDIDO*
+    if (!dateStr) return "—"
+    return new Date(dateStr).toLocaleDateString("pt-BR")
+  }
+  const unit = order.unit || "kg"
+  const itemUnit = linkedItemUnit || "un"
+  const toDeliver = order.quantityOrdered - order.quantityDelivered
+  const status = toDeliver > 0 ? `⚠️ Saldo pendente: ${toDeliver.toLocaleString("pt-BR")} ${unit}` : `✅ Pedido entregue integralmente`
 
+  return `📦 *REGISTRO DE ENTREGA — ESTOQUE PRO*
+━━━━━━━━━━━━━━━━━━━━
 🏷️ *Produto:* ${order.productDescription}
-📊 *Quantidade Pedida:* ${order.quantityOrdered} ${order.unit || "kg"}
-✅ *Quantidade Recebida:* ${order.quantityDelivered} ${order.unit || "kg"}
-${order.stockEntryQuantity ? `📦 *Lançado ao Estoque:* ${order.stockEntryQuantity} ${linkedItemUnit || "un"}` : ""}
-👤 *Fornecedor:* ${supplierName}
-📅 *Previsão de Chegada:* ${formatDate(order.expectedDate)}
-🕐 *Chegou em:* ${formatDate(order.deliveryDate)}
-${order.notes ? `\n📝 *Observações:* ${order.notes}` : ""}`;
+🏢 *Fornecedor:* ${supplierName}
+━━━━━━━━━━━━━━━━━━━━
+📊 *Quantidade Pedida:* ${order.quantityOrdered.toLocaleString("pt-BR")} ${unit}
+✅ *Quantidade Recebida:* ${order.quantityDelivered.toLocaleString("pt-BR")} ${unit}
+${order.stockEntryQuantity ? `📦 *Lançado no Estoque:* ${order.stockEntryQuantity.toLocaleString("pt-BR")} ${itemUnit}` : ""}
+━━━━━━━━━━━━━━━━━━━━
+📅 *Previsão de Entrega:* ${formatDate(order.expectedDate)}
+🕐 *Data de Entrega:* ${formatDate(order.deliveryDate)}
+${status}
+${order.notes ? `\n📝 *Obs:* ${order.notes}` : ""}
+━━━━━━━━━━━━━━━━━━━━
+_Registrado via Estoque PRO · VEXO_`
 }
 
 export function openWhatsAppWeb(message: string) {

@@ -58,6 +58,7 @@ export default function LoginPage() {
   const setupAdmin = useAuthStore((s) => s.setupAdmin)
   const login = useAuthStore((s) => s.login)
   const getCurrentUser = useAuthStore((s) => s.getCurrentUser)
+  const currentUserId = useAuthStore((s) => s.currentUserId)
   const resetPassword = useAuthStore((s) => s.resetPassword) 
 
   const [username, setUsername] = useState("")
@@ -72,17 +73,17 @@ export default function LoginPage() {
   const[isRegistering, setIsRegistering] = useState(false)
 
   useEffect(() => {
-    const user = getCurrentUser()
-    if (user) {
-      if (user.kind === "admin") {
-        navigate("/app/estoque", { replace: true })
-        return
-      }
-      const order: ModuleKey[] =["estoque", "scanner", "pedidos", "fornecedores", "historico", "etiquetas", "configuracoes"]
-      const fallback = order.find((m) => user.permissions[m])
-      if (fallback) navigate(`/app/${fallback}`, { replace: true })
+  const user = getCurrentUser()
+  if (user) {
+    if (user.kind === "admin") {
+      navigate("/app/estoque", { replace: true })
+      return
     }
-  },[getCurrentUser, navigate])
+    const order: ModuleKey[] = ["estoque", "scanner", "pedidos", "fornecedores", "historico", "etiquetas", "configuracoes"]
+    const fallback = order.find((m) => user.permissions[m])
+    if (fallback) navigate(`/app/${fallback}`, { replace: true })
+  }
+}, [currentUserId])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -95,11 +96,17 @@ export default function LoginPage() {
     
     try {
       if (isRegistering) {
-        if (!isValidDocument(documentId)) {
-          toast.error("CPF ou CNPJ inválido.")
-          setLoading(false)
-          return
-        }
+  const cleanDoc = documentId.replace(/\D/g, '')
+  if (!cleanDoc) {
+    toast.error("Informe o CPF ou CNPJ da empresa.")
+    setLoading(false)
+    return
+  }
+  if (!isValidDocument(cleanDoc)) {
+    toast.error("CPF ou CNPJ inválido. Verifique os números e tente novamente.")
+    setLoading(false)
+    return
+  }
         if (!companyName.trim()) {
           toast.error("Informe o nome da sua empresa.")
           setLoading(false)
@@ -113,8 +120,8 @@ export default function LoginPage() {
 
      
         await setupAdmin({ username, password, name: "Administrador", documentId, companyName, ownerCpf, phone })
-        toast.success("Conta VEXO criada!")
-        navigate("/app/estoque", { replace: true })
+        toast.success("Empresa cadastrada com sucesso! Faça seu login para continuar.")
+navigate("/login", { replace: true })
 
       } else {
         const res = await login(username, password)
@@ -171,12 +178,13 @@ export default function LoginPage() {
                 <div className="relative">
                   <FileText className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    id="document"
-                    value={documentId}
-                    onChange={(e) => setDocumentId(e.target.value)}
-                    placeholder="Apenas números"
-                    className="pl-10 h-11"
-                  />
+  id="document"
+  value={documentId}
+  onChange={(e) => setDocumentId(e.target.value.replace(/\D/g, ''))}
+  placeholder="Apenas números (CPF ou CNPJ)"
+  maxLength={14}
+  className="pl-10 h-11"
+/>
                 </div>
               </div>
 

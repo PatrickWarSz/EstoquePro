@@ -95,7 +95,7 @@ export const useStockStore = create<StockState>()(
             supabase.from('aliases_qr').select('*').eq('workspace_id', workspaceId)
           ]);
 
-          const suppliers = (supRes.data || []).map(f => ({ id: f.id, name: f.nome, contact: f.contato || '', phone: f.telefone || '', email: f.email || '', address: f.observacao || '', cnpj: f.cnpj || '' }));
+          const suppliers = (supRes.data || []).map(f => ({ id: f.id, name: f.nome, contact: f.contato || '', phone: f.telefone || '', email: f.email || '', notes: f.observacao || '', cnpj: f.cnpj || '' }));
           const locations = (locRes.data || []).map(l => ({ id: l.id, name: l.nome, description: l.descricao || '', itemRefs: l.item_refs ? JSON.parse(l.item_refs) : [] }));
           const qrAliases: Record<string, QrAlias> = {};
           (qrRes.data || []).forEach(qr => {
