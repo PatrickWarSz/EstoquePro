@@ -110,7 +110,7 @@ export default function AppLayout() {
   const days = expiryDate ? Math.ceil((new Date(expiryDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0
   return days <= 5 && days > 0 ? (
     <div className="bg-warning text-warning-foreground px-4 py-2 text-center text-sm font-medium flex flex-wrap items-center justify-center gap-2 shadow-md z-50 relative">
-      ⏳ Seu período de teste termina em <strong>{days} dia{days !== 1 ? 's' : ''}</strong>. Assine agora para não perder o acesso.
+      🚀 Seu acesso gratuito expira em <strong>{days} dia{days !== 1 ? 's' : ''}</strong> — Assine agora para não perder seu controle de estoque.
       <Button asChild variant="outline" size="sm" className="h-7 text-xs ml-2 text-foreground hover:bg-muted">
         <Link to="/app/configuracoes">Assinar Agora</Link>
       </Button>

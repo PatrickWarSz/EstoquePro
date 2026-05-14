@@ -188,26 +188,26 @@ navigate("/login", { replace: true })
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="ownerCpf">CPF do Titular Responsável</Label>
-                <div className="relative">
-                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="ownerCpf"
-                    value={ownerCpf}
-                    onChange={(e) => setOwnerCpf(e.target.value)}
-                    placeholder="Necessário para segurança e assinatura"
-                    className="pl-10 h-11"
-                  />
-                </div>
-
-                {isRegistering && documentId.length > 0 && (
-  <p className={`text-xs mt-1 ${isValidDocument(documentId.replace(/\D/g, '')) ? 'text-success' : 'text-destructive'}`}>
-    {isValidDocument(documentId.replace(/\D/g, '')) ? '✓ Documento válido' : '✗ Documento inválido'}
+              {documentId.length > 0 && (
+  <p className={`text-xs -mt-3 ${isValidDocument(documentId) ? 'text-green-600' : 'text-destructive'}`}>
+    {isValidDocument(documentId) ? '✓ Documento válido' : '✗ Documento inválido — verifique os números'}
   </p>
 )}
 
-              </div>
+              <div className="space-y-2">
+  <Label htmlFor="ownerCpf">CPF do Titular Responsável</Label>
+  <div className="relative">
+    <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+    <Input
+      id="ownerCpf"
+      value={ownerCpf}
+      onChange={(e) => setOwnerCpf(e.target.value.replace(/\D/g, ''))}
+      placeholder="Apenas números"
+      maxLength={11}
+      className="pl-10 h-11"
+    />
+  </div>
+</div>
             </>
           )}
 

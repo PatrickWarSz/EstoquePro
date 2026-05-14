@@ -54,6 +54,7 @@ interface BatchRow {
   categoryName: string
   item: StockItem
   qty: string
+  type: "entrada" | "saida"
 }
 
 // One reversible movement (single or batch). Stored only in memory: persists
@@ -80,7 +81,7 @@ export default function ScannerPage() {
   const [torchSupported, setTorchSupported] = useState(false)
   const [continuous, setContinuous] = useState(false)
   const [soundOn, setSoundOn] = useState(true)
-  const continuousRef = useRef(false)
+  const continuousRef = useRef(true)
   useEffect(() => { continuousRef.current = continuous }, [continuous])
 
   const {
@@ -105,17 +106,18 @@ export default function ScannerPage() {
 
   // Confirmation summary + Undo
   const [summary, setSummary] = useState<null | {
-    kind: "single" | "batch"
-    title: string
-    type: "entrada" | "saida"
-    rows: Array<{
-      itemName: string
-      unit: string
-      qty: number
-      previous: number
-      next: number
-    }>
-  }>(null)
+  kind: "single" | "batch"
+  title: string
+  type: "entrada" | "saida"
+  rows: Array<{
+    itemName: string
+    unit: string
+    qty: number
+    previous: number
+    next: number
+    type?: "entrada" | "saida"
+  }>
+}>(null)
   const [lastUndo, setLastUndo] = useState<UndoEntry | null>(null)
 
   // Unknown QR — offer to bind it (alias) to an existing item/location
@@ -235,11 +237,12 @@ export default function ScannerPage() {
           const item = cat?.items.find((i) => i.id === itemId)
           if (!cat || !item) return null
           return {
-            categoryId: cat.id,
-            categoryName: cat.name,
-            item,
-            qty: "",
-          } as BatchRow
+  categoryId: cat.id,
+  categoryName: cat.name,
+  item,
+  qty: "",
+  type: "saida",
+} as BatchRow
         })
         .filter(Boolean) as BatchRow[]
       setBatchRows(rows)
@@ -248,6 +251,12 @@ export default function ScannerPage() {
       setBatchLocationId(loc.id)
     }
   }
+
+  const toggleRowType = (idx: number) => {
+  setBatchRows((rows) =>
+    rows.map((r, i) => i === idx ? { ...r, type: r.type === "saida" ? "entrada" : "saida" } : r)
+  )
+}
 
   const startScanner = async () => {
     setError(null)
@@ -360,44 +369,38 @@ export default function ScannerPage() {
   }
 
   const reviewBatch = () => {
-    const toApply = batchRows
-      .map((r) => ({ row: r, n: parseFloat(r.qty) }))
-      .filter(({ n }) => !isNaN(n) && n > 0)
+  const toApply = batchRows
+    .map((r) => ({ row: r, n: parseFloat(r.qty) }))
+    .filter(({ n }) => !isNaN(n) && n > 0)
 
-    if (toApply.length === 0) {
-      toast.error("Informe a quantidade em pelo menos um item")
-      return
-    }
-
-    if (batchType === "saida") {
-      const insufficient = toApply.find(
-        ({ row, n }) => n > row.item.quantity,
-      )
-      if (insufficient) {
-        toast.error(
-          `Saldo insuficiente em "${insufficient.row.item.name}"`,
-        )
-        return
-      }
-    }
-
-    const loc = locations.find((l) => l.id === batchLocationId)
-    setSummary({
-      kind: "batch",
-      title: loc?.name || "Lote",
-      type: batchType,
-      rows: toApply.map(({ row, n }) => ({
-        itemName: row.item.name,
-        unit: row.item.unit,
-        qty: n,
-        previous: row.item.quantity,
-        next:
-          batchType === "entrada"
-            ? row.item.quantity + n
-            : row.item.quantity - n,
-      })),
-    })
+  if (toApply.length === 0) {
+    toast.error("Informe a quantidade em pelo menos um item")
+    return
   }
+
+  const insufficient = toApply.find(
+    ({ row, n }) => row.type === "saida" && n > row.item.quantity,
+  )
+  if (insufficient) {
+    toast.error(`Saldo insuficiente em "${insufficient.row.item.name}"`)
+    return
+  }
+
+  const loc = locations.find((l) => l.id === batchLocationId)
+  setSummary({
+    kind: "batch",
+    title: loc?.name || "Lote",
+    type: "saida",
+    rows: toApply.map(({ row, n }) => ({
+      itemName: row.item.name,
+      unit: row.item.unit,
+      qty: n,
+      previous: row.item.quantity,
+      next: row.type === "entrada" ? row.item.quantity + n : row.item.quantity - n,
+      type: row.type,
+    })),
+  })
+}
 
   const applySummary = () => {
     if (!summary) return
@@ -433,16 +436,15 @@ export default function ScannerPage() {
         .map((r) => ({ row: r, n: parseFloat(r.qty) }))
         .filter(({ n }) => !isNaN(n) && n > 0)
       filled.forEach(({ row, n }) => {
-        const next =
-          summary.type === "entrada" ? row.item.quantity + n : row.item.quantity - n
-        updateItemQuantity(
-          row.categoryId,
-          row.item.id,
-          next,
-          summary.type,
-          n,
-          batchNote.trim() || undefined,
-        )
+  const next = row.type === "entrada" ? row.item.quantity + n : row.item.quantity - n
+  updateItemQuantity(
+    row.categoryId,
+    row.item.id,
+    next,
+    row.type,
+    n,
+    batchNote.trim() || undefined,
+  )
         undo.changes.push({
           categoryId: row.categoryId,
           itemId: row.item.id,
@@ -534,16 +536,12 @@ export default function ScannerPage() {
 
       {/* Mode toggles */}
       <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-card px-4 py-3">
-        <label className="flex items-center gap-2 text-sm">
-          <Switch checked={continuous} onCheckedChange={setContinuous} />
-          <span className="flex items-center gap-1.5">
-            <Repeat className="h-4 w-4" /> Modo contínuo
-          </span>
-        </label>
+        
         <label className="flex items-center gap-2 text-sm">
           <Switch checked={soundOn} onCheckedChange={setSoundOn} />
           <span>Bip ao ler</span>
         </label>
+
         {lastUndo && (
           <Button
             size="sm"
@@ -654,11 +652,23 @@ export default function ScannerPage() {
                 const filled = row.qty.trim() !== "" && parseFloat(row.qty) > 0
                 return (
                   <div
-                    key={`${row.categoryId}:${row.item.id}`}
-                    className={`flex items-center gap-3 rounded-md border bg-card p-2 transition ${
-                      filled ? "border-primary ring-1 ring-primary/30" : ""
-                    }`}
-                  >
+  key={`${row.categoryId}:${row.item.id}`}
+  className={`flex items-center gap-3 rounded-md border p-2 transition ${
+    !filled ? "bg-card" :
+    row.type === "entrada" ? "border-green-500 bg-green-500/10" : "border-red-500 bg-red-500/10"
+  }`}
+>
+                      <button
+  type="button"
+  onClick={() => toggleRowType(idx)}
+  className={`shrink-0 rounded-md px-2 py-1 text-xs font-bold transition ${
+    row.type === "entrada" 
+      ? "bg-green-500/20 text-green-700" 
+      : "bg-red-500/20 text-red-700"
+  }`}
+>
+  {row.type === "entrada" ? "ENT" : "SAÍ"}
+</button>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium">
                         {row.item.name}
@@ -839,12 +849,12 @@ export default function ScannerPage() {
                       {r.previous.toLocaleString("pt-BR")}
                       <span className="mx-1">→</span>
                       <strong
-                        className={
-                          summary.type === "entrada"
-                            ? "text-success"
-                            : "text-destructive"
-                        }
-                      >
+  className={
+    (r.type || summary.type) === "entrada"
+      ? "text-success"
+      : "text-destructive"
+  }
+>
                         {r.next.toLocaleString("pt-BR")}
                       </strong>{" "}
                       <span className="text-xs">{r.unit}</span>

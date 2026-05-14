@@ -10,7 +10,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { workspaceId } = await req.json()
+    const bodyText = await req.text()
+    const { workspaceId } = JSON.parse(bodyText)
     if (!workspaceId) throw new Error("Workspace ID ausente.")
 
     const asaasApiKey = Deno.env.get('ASAAS_API_KEY')
@@ -19,7 +20,6 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl!, supabaseKey!)
 
-    // 1. Busca o ID da assinatura no banco
     const { data: workspace } = await supabase
       .from('workspaces')
       .select('asaas_subscription_id')
@@ -30,16 +30,16 @@ serve(async (req) => {
       throw new Error("Nenhuma assinatura ativa encontrada para este cliente.")
     }
 
-    // 2. Manda a ordem de exclusão para o Asaas
-    const asaasRes = await fetch(`https://api.asaas.com/api/v3/subscriptions/`, {
+    const asaasRes = await fetch(`https://api.asaas.com/v3/subscriptions/${workspace.asaas_subscription_id}`, {
       method: 'DELETE',
       headers: { 'access_token': asaasApiKey! }
     })
 
-    const asaasData = await asaasRes.json()
-    if (!asaasRes.ok) throw new Error(asaasData.errors?.[0]?.description || "Erro ao cancelar no Asaas")
+    if (!asaasRes.ok) {
+      const asaasData = await asaasRes.json()
+      throw new Error(asaasData.errors?.[0]?.description || "Erro ao cancelar no Asaas")
+    }
 
-    // 3. Atualiza nosso banco de dados
     await supabase.from('workspaces').update({
       status_assinatura: 'canceled'
     }).eq('id', workspaceId)

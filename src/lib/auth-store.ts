@@ -76,7 +76,7 @@ export const useAuthStore = create<AuthState>()(
         const u = username.toLowerCase().trim();
         
         const trialEndDate = new Date();
-        trialEndDate.setDate(trialEndDate.getDate() + 7);
+trialEndDate.setDate(trialEndDate.getDate() + 15);
         
         const { data: workspace, error: wErr } = await supabase
           .from('workspaces')
