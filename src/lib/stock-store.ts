@@ -125,7 +125,7 @@ export const useStockStore = create<StockState>()(
                productDescription: p.descricao || p.produto_id || 'Pedido sem descrição',
 orderDate: p.criado_em || new Date().toISOString(), 
 quantityReturned: 0, 
-pricePerUnit: 0
+pricePerUnit: Number(p.preco_por_unidade) || 0,
              };
           });
 
@@ -227,6 +227,7 @@ pricePerUnit: 0
   produto_id: o.linkedItemId, 
   categoria_id: o.linkedCategoryId, 
   unidade: o.unit, 
+  preco_por_unidade: o.pricePerUnit || 0,
   quantidade_pedida: o.quantityOrdered, 
   data_esperada: o.expectedDate, 
   status_prazo: o.deadlineStatus, 

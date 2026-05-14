@@ -91,7 +91,7 @@ export default function AppLayout() {
             </Button>
           )}
           
-          <Button variant="outline" size="lg" onClick={() => window.open("https://wa.me/5511999999999", "_blank")} className="w-full sm:w-auto">
+          <Button variant="outline" size="lg" onClick={() => window.open("https://wa.me/5532935005786", "_blank")} className="w-full sm:w-auto">
             Falar com o Suporte
           </Button>
         </div>

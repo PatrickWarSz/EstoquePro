@@ -125,15 +125,6 @@ export function GlobalHistoryDialog({ open, onOpenChange }: GlobalHistoryDialogP
                 <Calendar className="h-5 w-5" />
                 Histórico Geral de Movimentações
               </DialogTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/10"
-                onClick={() => setClearConfirmOpen(true)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Limpar histórico
-              </Button>
             </div>
           </DialogHeader>
 
