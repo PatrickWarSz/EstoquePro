@@ -43,6 +43,34 @@ async function verifySupabaseToken(req: Request): Promise<{ userId: string } | n
   }
 }
 
+// Função para verificar se o usuário é admin do workspace
+async function verifyWorkspaceAdmin(supabase: any, userId: string, workspaceId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('tipo, workspace_id')
+      .eq('id', userId)
+      .eq('workspace_id', workspaceId)
+      .single()
+    
+    return !error && data?.tipo === 'admin'
+  } catch {
+    return false
+  }
+}
+
+// Função para fetch com timeout
+async function fetchWithTimeout(url: string, options: any = {}, timeoutMs: number = 5000): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 serve(async (req) => {
   const origin = req.headers.get('origin')
   const corsHeaders = getCorsHeaders(origin)
@@ -73,19 +101,28 @@ serve(async (req) => {
       throw new Error("Parâmetros obrigatórios faltando.")
     }
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
+    // SEGURANÇA: Verificar que o usuário é admin do workspace
+    const isAdmin = await verifyWorkspaceAdmin(supabase, auth.userId, workspaceId)
+    if (!isAdmin) {
+      return new Response(JSON.stringify({ error: "Acesso negado. Apenas admins podem criar faturas." }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 403,
+      })
+    }
+
     // SEGURANÇA: Log sem dados sensíveis
     console.log(`[asaas-checkout] Checkout iniciado | userId: ${auth.userId}`)
 
     // 3. Pega as chaves
     const asaasApiKey = Deno.env.get('ASAAS_API_KEY')
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-    if (!asaasApiKey || !supabaseUrl || !supabaseKey) {
+    if (!asaasApiKey) {
       throw new Error("Configurações do servidor (Secrets) incompletas.")
     }
-
-    const supabase = createClient(supabaseUrl, supabaseKey)
 
     // 4. Busca o cliente no banco
     const { data: workspace, error: wErr } = await supabase
@@ -106,7 +143,7 @@ serve(async (req) => {
     const today = new Date().toISOString().split('T')[0]
 
     // 6. Chamada ao Asaas (Sandbox)
-    const subRes = await fetch('https://api.asaas.com/v3/subscriptions', {
+    const subRes = await fetchWithTimeout('https://api.asaas.com/v3/subscriptions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -128,7 +165,7 @@ serve(async (req) => {
     // 7. Salva a assinatura e busca o link
     await supabase.from('workspaces').update({ asaas_subscription_id: subData.id }).eq('id', workspaceId)
 
-    const payRes = await fetch(`https://api.asaas.com/v3/payments?subscription=${subData.id}`, {
+    const payRes = await fetchWithTimeout(`https://api.asaas.com/v3/payments?subscription=${subData.id}`, {
       headers: { 'access_token': asaasApiKey }
     })
     const payData = await payRes.json()

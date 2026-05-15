@@ -43,6 +43,34 @@ async function verifySupabaseToken(req: Request): Promise<{ userId: string } | n
   }
 }
 
+// Função para verificar se o usuário é admin do workspace
+async function verifyWorkspaceAdmin(supabase: any, userId: string, workspaceId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('tipo, workspace_id')
+      .eq('id', userId)
+      .eq('workspace_id', workspaceId)
+      .single()
+    
+    return !error && data?.tipo === 'admin'
+  } catch {
+    return false
+  }
+}
+
+// Função para fetch com timeout
+async function fetchWithTimeout(url: string, options: any = {}, timeoutMs: number = 5000): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 serve(async (req) => {
   const origin = req.headers.get('origin')
   const corsHeaders = getCorsHeaders(origin)
@@ -69,16 +97,27 @@ serve(async (req) => {
       throw new Error("Parâmetros obrigatórios faltando.")
     }
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    const supabase = createClient(supabaseUrl!, supabaseServiceKey!)
+
+    // SEGURANÇA: Verificar que o usuário é admin do workspace
+    const isAdmin = await verifyWorkspaceAdmin(supabase, auth.userId, workspaceId)
+    if (!isAdmin) {
+      return new Response(JSON.stringify({ error: "Acesso negado. Apenas admins podem criar clientes." }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 403,
+      })
+    }
+
     // SEGURANÇA: Log sem dados sensíveis (apenas IDs)
     console.log(`[asaas-customer] Criando cliente | userId: ${auth.userId}`)
 
     const asaasApiKey = Deno.env.get('ASAAS_API_KEY')
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
     if (!asaasApiKey) throw new Error("Chave do Asaas não configurada.")
 
-    const asaasRes = await fetch('https://api.asaas.com/v3/customers', {
+    const asaasRes = await fetchWithTimeout('https://api.asaas.com/v3/customers', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -104,7 +143,6 @@ serve(async (req) => {
     const customerId = asaasData.id
     const portalUrl = `https://www.asaas.com/c/${customerId}`
 
-    const supabase = createClient(supabaseUrl!, supabaseServiceKey!)
     const { error: dbErr } = await supabase
       .from('workspaces')
       .update({ 
