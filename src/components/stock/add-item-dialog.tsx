@@ -87,8 +87,7 @@ export function AddItemDialog({ open, onOpenChange, defaultCategoryId }: AddItem
         quantity: parseFloat(it.quantity) || 0,
         minQuantity: parseFloat(it.minQuantity) || 0,
         unit: it.unit,
-        history: [],
-      })
+      } as any)
     }
     toast.success(`${valid.length} item${valid.length > 1 ? 'ns' : ''} adicionado${valid.length > 1 ? 's' : ''} em ${selectedCategory?.name}`)
     reset()

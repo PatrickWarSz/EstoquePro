@@ -1,17 +1,25 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0"
 
-// SEGURANÇA: CORS restrito ao domínio da VEXO
+// SEGURANÇA: CORS restrito aos domínios da VEXO
 const ALLOWED_ORIGINS = [
   'https://app.vexo.com.br',
   'https://www.vexo.com.br',
+  'https://app.vexodev.com.br',
+  'https://vexo.com.br',
   'http://localhost:8080', // desenvolvimento local
 ]
 
-const getCorsHeaders = (origin: string | null) => ({
-  'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(origin || '') ? origin : ALLOWED_ORIGINS[0],
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-})
+const getCorsHeaders = (origin: string | null) => {
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  }
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin
+  }
+  return headers
+}
 
 // Função para validar token JWT do Supabase
 async function verifySupabaseToken(req: Request): Promise<{ userId: string } | null> {

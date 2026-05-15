@@ -9,7 +9,6 @@ import {
   Flashlight,
   FlashlightOff,
   Link2,
-  Repeat,
   Undo2,
   MapPin,
   Package,
@@ -79,10 +78,8 @@ export default function ScannerPage() {
   const [lastText, setLastText] = useState<string | null>(null)
   const [torchOn, setTorchOn] = useState(false)
   const [torchSupported, setTorchSupported] = useState(false)
-  const [continuous, setContinuous] = useState(false)
   const [soundOn, setSoundOn] = useState(true)
   const continuousRef = useRef(true)
-  useEffect(() => { continuousRef.current = continuous }, [continuous])
 
   const {
   categories,
@@ -138,7 +135,15 @@ export default function ScannerPage() {
   const detectTorchSupport = () => {
     const track = getVideoTrack()
     const caps = (track?.getCapabilities?.() as { torch?: boolean } | undefined)
-    setTorchSupported(!!caps?.torch)
+    const supported = !!caps?.torch
+    setTorchSupported(supported)
+    if (!supported) {
+      setTimeout(() => {
+        const t = getVideoTrack()
+        const c = (t?.getCapabilities?.() as { torch?: boolean } | undefined)
+        setTorchSupported(!!c?.torch)
+      }, 1500)
+    }
   }
 
   const toggleTorch = async () => {
@@ -272,7 +277,7 @@ export default function ScannerPage() {
       )
       setScanning(true)
       // Wait a tick for the video track to be live, then probe torch capability
-      setTimeout(detectTorchSupport, 500)
+      setTimeout(detectTorchSupport, 800)
     } catch (e: any) {
       setError(
         e?.message ||
@@ -299,17 +304,14 @@ export default function ScannerPage() {
         () => {},
       )
       setScanning(true)
-      setTimeout(detectTorchSupport, 300)
+      setTimeout(detectTorchSupport, 800)
     } catch {
       await startScanner()
     }
   }
 
   const resumeIfContinuous = () => {
-    if (continuousRef.current) {
-      // small delay so the sheet finishes closing
-      setTimeout(() => { resumeScanner() }, 150)
-    }
+    setTimeout(() => { resumeScanner() }, 300)
   }
 
   useEffect(() => {
@@ -450,7 +452,7 @@ export default function ScannerPage() {
           itemId: row.item.id,
           itemName: row.item.name,
           unit: row.item.unit,
-          delta: summary.type === "entrada" ? n : -n,
+          delta: row.type === "entrada" ? n : -n,
           previousQty: row.item.quantity,
         })
       })
