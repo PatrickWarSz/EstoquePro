@@ -112,10 +112,17 @@ trialEndDate.setDate(trialEndDate.getDate() + 15);
         if (uErr) throw uErr;
 
       try {
+          // SEGURANÇA: Passar o token JWT para autenticar a Edge Function
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          
           await supabase.functions.invoke('asaas-customer', {
-            body: { workspaceId: workspace.id, companyName, documentId: cleanDoc, email: u, phone } // Adicionou phone aqui
+            body: { workspaceId: workspace.id, companyName, documentId: cleanDoc, email: u, phone },
+            headers: { Authorization: `Bearer ${token}` }
           });
-        } catch (err) { console.error("Erro Asaas:", err); }
+        } catch (err) { 
+          console.error("Erro ao criar cliente Asaas (erro não-crítico):", (err as Error).message); 
+        }
 
         set({
           admin: { username: u, passwordHash: 'migrated', name, companyName },
@@ -223,17 +230,58 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
 
       updateEmployee: async (id, updates) => {
         const { supabase } = await import('./supabase');
+        const workspaceId = get().workspaceId;
+        
+        // SEGURANÇA: Validar que o funcionário pertence a este workspace antes de atualizar
+        const { data: emp, error: checkErr } = await supabase
+          .from('usuarios')
+          .select('id')
+          .eq('id', id)
+          .eq('workspace_id', workspaceId)
+          .single();
+        
+        if (checkErr || !emp) {
+          console.error('[updateEmployee] Tentativa de acesso não autorizado');
+          return; // Silenciosamente falha - não vaza que o recurso não existe
+        }
+        
         const dbUpdates: any = {};
         if (updates.name) dbUpdates.nome = updates.name;
         if (updates.permissions) dbUpdates.permissoes = updates.permissions;
         if (updates.active !== undefined) dbUpdates.ativo = updates.active;
-        await supabase.from('usuarios').update(dbUpdates).eq('id', id);
+        
+        await supabase
+          .from('usuarios')
+          .update(dbUpdates)
+          .eq('id', id)
+          .eq('workspace_id', workspaceId);
+        
         set({ employees: get().employees.map(e => e.id === id ? { ...e, ...updates } : e) });
       },
 
       removeEmployee: async (id) => {
         const { supabase } = await import('./supabase');
-        await supabase.from('usuarios').update({ ativo: false }).eq('id', id);
+        const workspaceId = get().workspaceId;
+        
+        // SEGURANÇA: Validar que o funcionário pertence a este workspace antes de remover
+        const { data: emp, error: checkErr } = await supabase
+          .from('usuarios')
+          .select('id')
+          .eq('id', id)
+          .eq('workspace_id', workspaceId)
+          .single();
+        
+        if (checkErr || !emp) {
+          console.error('[removeEmployee] Tentativa de acesso não autorizado');
+          return; // Silenciosamente falha - não vaza que o recurso não existe
+        }
+        
+        await supabase
+          .from('usuarios')
+          .update({ ativo: false })
+          .eq('id', id)
+          .eq('workspace_id', workspaceId);
+        
         set({ employees: get().employees.map(e => e.id === id ? { ...e, active: false } : e) });
       },
 

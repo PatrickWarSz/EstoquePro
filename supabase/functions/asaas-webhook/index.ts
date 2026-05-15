@@ -16,7 +16,8 @@ serve(async (req) => {
     const event = body.event
     const payment = body.payment
 
-    console.log(`Webhook: ${event} | Cliente: ${payment.customer}`)
+    // SEGURANÇA: Log sem expor customer ID
+    console.log(`[asaas-webhook] Evento processado: ${event}`)
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')

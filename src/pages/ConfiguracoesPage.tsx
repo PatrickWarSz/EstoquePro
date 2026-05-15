@@ -61,9 +61,14 @@ export default function ConfiguracoesPage() {
     try {
       const { supabase } = await import("@/lib/supabase");
       
+      // SEGURANÇA: Passar o token JWT para autenticar a Edge Function
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
       // Chama a Edge Function que você acabou de fazer o deploy!
       const { data, error } = await supabase.functions.invoke('asaas-checkout', {
-        body: { workspaceId, plan }
+        body: { workspaceId, plan },
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (error) throw error;
@@ -80,7 +85,8 @@ export default function ConfiguracoesPage() {
     } catch (err: any) {
       toast.dismiss(toastId);
       toast.error(err.message || "Erro ao conectar com o financeiro.");
-      console.error("Erro no checkout:", err);
+      // Log de erro sem expor dados sensíveis
+      console.error("[handleSubscribe] Erro ao processar checkout:", err.message);
     }
   };
 

@@ -65,8 +65,14 @@ export function SubscriptionPanel({
     
     try {
       const { supabase } = await import("@/lib/supabase");
+      
+      // SEGURANÇA: Passar o token JWT para autenticar a Edge Function
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
       const { data, error } = await supabase.functions.invoke('asaas-upgrade-sub', {
-        body: { workspaceId, newPlan: "annual" }
+        body: { workspaceId, newPlan: "annual" },
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (error) throw error;
@@ -94,7 +100,15 @@ export function SubscriptionPanel({
     
     try {
       const { supabase } = await import("@/lib/supabase");
-      const { data, error } = await supabase.functions.invoke('asaas-cancel-sub', { body: { workspaceId } });
+      
+      // SEGURANÇA: Passar o token JWT para autenticar a Edge Function
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
+      const { data, error } = await supabase.functions.invoke('asaas-cancel-sub', { 
+        body: { workspaceId },
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);

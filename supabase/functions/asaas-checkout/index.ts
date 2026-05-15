@@ -1,26 +1,72 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0"
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+// SEGURANÇA: CORS restrito ao domínio da VEXO
+const ALLOWED_ORIGINS = [
+  'https://app.vexo.com.br',
+  'https://www.vexo.com.br',
+  'http://localhost:8080', // desenvolvimento local
+]
+
+const getCorsHeaders = (origin: string | null) => ({
+  'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(origin || '') ? origin : ALLOWED_ORIGINS[0],
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+})
+
+// Função para validar token JWT do Supabase
+async function verifySupabaseToken(req: Request): Promise<{ userId: string } | null> {
+  const authHeader = req.headers.get('authorization')
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null
+  }
+
+  const token = authHeader.slice(7)
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+
+  try {
+    const supabase = createClient(supabaseUrl!, supabaseKey!)
+    const { data, error } = await supabase.auth.getUser(token)
+    
+    if (error || !data.user) return null
+    return { userId: data.user.id }
+  } catch {
+    return null
+  }
 }
 
 serve(async (req) => {
+  const origin = req.headers.get('origin')
+  const corsHeaders = getCorsHeaders(origin)
+
   // 1. Lida com a requisição de pré-vôo (CORS)
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
+    // SEGURANÇA: Validar autenticação
+    const auth = await verifySupabaseToken(req)
+    if (!auth) {
+      return new Response(JSON.stringify({ error: "Não autorizado. Faça login primeiro." }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401,
+      })
+    }
+
     // 2. Valida se existe um corpo na requisição antes de tentar ler
-   const bodyText = await req.text();
-console.log("Body recebido:", bodyText);
-if (!bodyText) {
-  throw new Error("Corpo da requisição vazio.");
-}
-const { workspaceId, plan } = JSON.parse(bodyText);
-    console.log(`Processando checkout para Workspace: ${workspaceId}, Plano: ${plan}`);
+    const bodyText = await req.text()
+    if (!bodyText) {
+      throw new Error("Corpo da requisição vazio.")
+    }
+    const { workspaceId, plan } = JSON.parse(bodyText)
+
+    if (!workspaceId || !plan) {
+      throw new Error("Parâmetros obrigatórios faltando.")
+    }
+
+    // SEGURANÇA: Log sem dados sensíveis
+    console.log(`[asaas-checkout] Checkout iniciado | userId: ${auth.userId}`)
 
     // 3. Pega as chaves
     const asaasApiKey = Deno.env.get('ASAAS_API_KEY')
@@ -28,7 +74,7 @@ const { workspaceId, plan } = JSON.parse(bodyText);
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
     if (!asaasApiKey || !supabaseUrl || !supabaseKey) {
-      throw new Error("Configurações do servidor (Secrets) incompletas.");
+      throw new Error("Configurações do servidor (Secrets) incompletas.")
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey)
@@ -41,7 +87,7 @@ const { workspaceId, plan } = JSON.parse(bodyText);
       .single()
 
     if (wErr || !workspace?.asaas_customer_id) {
-      throw new Error("Empresa não encontrada ou sem ID do Asaas.");
+      throw new Error("Empresa não encontrada ou sem ID do Asaas.")
     }
 
     // 5. Configura valores
@@ -69,16 +115,18 @@ const { workspaceId, plan } = JSON.parse(bodyText);
     })
 
     const subData = await subRes.json()
-    if (!subRes.ok) throw new Error(subData.errors?.[0]?.description || "Erro no Asaas.");
+    if (!subRes.ok) throw new Error(subData.errors?.[0]?.description || "Erro no Asaas.")
 
     // 7. Salva a assinatura e busca o link
     await supabase.from('workspaces').update({ asaas_subscription_id: subData.id }).eq('id', workspaceId)
 
-   const payRes = await fetch(`https://api.asaas.com/v3/payments?subscription=${subData.id}`, {
-  headers: { 'access_token': asaasApiKey }
-})
+    const payRes = await fetch(`https://api.asaas.com/v3/payments?subscription=${subData.id}`, {
+      headers: { 'access_token': asaasApiKey }
+    })
     const payData = await payRes.json()
     const invoiceUrl = payData.data[0]?.invoiceUrl
+
+    console.log(`[asaas-checkout] ✓ Checkout criado com sucesso`)
 
     return new Response(JSON.stringify({ invoiceUrl }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -86,7 +134,7 @@ const { workspaceId, plan } = JSON.parse(bodyText);
     })
 
   } catch (error: any) {
-    console.error("Erro Fatal:", error.message)
+    console.error(`[asaas-checkout] Erro: ${error.message}`)
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
