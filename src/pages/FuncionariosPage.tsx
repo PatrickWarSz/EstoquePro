@@ -105,6 +105,9 @@ export default function FuncionariosPage() {
   const [editName, setEditName] = useState("")
   const [editPerms, setEditPerms] = useState<Permissions>(emptyPermissions())
   const [editIsAdmin, setEditIsAdmin] = useState(false)
+  const [resetPassword, setResetPassword] = useState("")
+
+  const resetForm = () => {
     setName("")
     setUsername("")
     setPassword("")
