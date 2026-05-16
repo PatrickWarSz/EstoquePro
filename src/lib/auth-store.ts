@@ -24,7 +24,7 @@ export const fullPermissions = (): Permissions => ({
 })
 
 export interface Employee {
-  id: string; username: string; passwordHash: string; name: string; permissions: Permissions; active: boolean; createdAt: string;
+  id: string; username: string; passwordHash: string; name: string; permissions: Permissions; active: boolean; isAdmin: boolean; createdAt: string;
 }
 
 export interface AdminAccount {
@@ -32,8 +32,8 @@ export interface AdminAccount {
 }
 
 export type CurrentUser =
-  | { kind: "admin"; id: "admin"; name: string; username: string; permissions: Permissions }
-  | { kind: "employee"; id: string; name: string; username: string; permissions: Permissions }
+  | { kind: "admin"; id: "admin"; name: string; username: string; permissions: Permissions; isAdmin: true }
+  | { kind: "employee"; id: string; name: string; username: string; permissions: Permissions; isAdmin: boolean }
   | null
 
 interface AuthState {
@@ -52,9 +52,9 @@ interface AuthState {
   logout: () => void
   resetPassword: (email: string) => Promise<{ ok: boolean; error?: string }>
   refreshSubscription: () => Promise<void>
-  addEmployee: (input: { username: string; password: string; name: string; permissions: any }) => Promise<{ ok: boolean; id?: string; error?: string }>
+  addEmployee: (input: { username: string; password: string; name: string; permissions: any; isAdmin?: boolean }) => Promise<{ ok: boolean; id?: string; error?: string }>
   updateEmployee: (id: string, updates: Partial<Employee>) => void
-  removeEmployee: (id: string) => void
+  removeEmployee: (id: string) => Promise<void>
   resetEmployeePassword: (id: string, newPassword: string) => Promise<void>
   getCurrentUser: () => CurrentUser
   fetchEmployees: () => Promise<void>
@@ -230,10 +230,10 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
         const { data: authData, error: authErr } = await tempClient.auth.signUp({ email: virtualEmail, password });
         if (authErr) return { ok: false, error: authErr.message };
 
-        const { data, error } = await supabase.from('usuarios').insert([{ id: authData.user?.id, workspace_id: get().workspaceId, nome: name, username: u, tipo: 'funcionario', permissoes: permissions, ativo: true, senha_hash: 'migrated_to_auth' }]).select().single();
+        const { data, error } = await supabase.from('usuarios').insert([{ id: authData.user?.id, workspace_id: get().workspaceId, nome: name, username: u, tipo: 'funcionario', permissoes: permissions, is_admin: input.isAdmin || false, ativo: true, senha_hash: 'migrated_to_auth' }]).select().single();
         if (error) return { ok: false, error: error.message };
 
-        const newEmp: Employee = { id: data.id, username: data.username, passwordHash: 'migrated', name: data.nome, permissions: data.permissoes, active: data.ativo, createdAt: data.criado_em };
+        const newEmp: Employee = { id: data.id, username: data.username, passwordHash: 'migrated', name: data.nome, permissions: data.permissoes, active: data.ativo, isAdmin: data.is_admin || false, createdAt: data.criado_em };
         set({ employees: [...get().employees, newEmp] });
         return { ok: true, id: data.id };
       },
@@ -259,6 +259,7 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
         if (updates.name) dbUpdates.nome = updates.name;
         if (updates.permissions) dbUpdates.permissoes = updates.permissions;
         if (updates.active !== undefined) dbUpdates.ativo = updates.active;
+        if (updates.isAdmin !== undefined) dbUpdates.is_admin = updates.isAdmin;
         
         await supabase
           .from('usuarios')
@@ -272,27 +273,41 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
       removeEmployee: async (id) => {
         const { supabase } = await import('./supabase');
         const workspaceId = get().workspaceId;
-        
-        // SEGURANÇA: Validar que o funcionário pertence a este workspace antes de remover
+
+        // SEGURANÇA: Confirmar que o funcionário pertence ao workspace
         const { data: emp, error: checkErr } = await supabase
           .from('usuarios')
           .select('id')
           .eq('id', id)
           .eq('workspace_id', workspaceId)
           .single();
-        
+
         if (checkErr || !emp) {
           console.error('[removeEmployee] Tentativa de acesso não autorizado');
-          return; // Silenciosamente falha - não vaza que o recurso não existe
+          return;
         }
-        
+
+        // 1. Soft delete no banco — preserva histórico de movimentações
         await supabase
           .from('usuarios')
-          .update({ ativo: false })
+          .update({ ativo: false, deleted_at: new Date().toISOString() })
           .eq('id', id)
           .eq('workspace_id', workspaceId);
-        
-        set({ employees: get().employees.map(e => e.id === id ? { ...e, active: false } : e) });
+
+        // 2. Remover do Supabase Auth — impede login futuro
+        // Usa service role via Edge Function (anon key não tem permissão para isso)
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          await supabase.functions.invoke('delete-auth-user', {
+            body: { userId: id },
+            headers: { Authorization: `Bearer ${session?.access_token}` }
+          });
+        } catch (err) {
+          console.error('[removeEmployee] Erro ao remover do Auth (não crítico):', err);
+        }
+
+        // 3. Remove do estado local
+        set({ employees: get().employees.filter(e => e.id !== id) });
       },
 
       resetEmployeePassword: async (id, newPassword) => {
@@ -307,7 +322,7 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
 
       getCurrentUser: () => {
   const { admin, employees, currentUserId } = get();
-  if (currentUserId === 'admin' && admin) return { kind: 'admin', id: 'admin', ...admin, permissions: fullPermissions() };
+  if (currentUserId === 'admin' && admin) return { kind: 'admin', id: 'admin', ...admin, permissions: fullPermissions(), isAdmin: true };
   if (currentUserId && currentUserId !== 'admin') {
     const emp = employees.find(e => e.id === currentUserId);
     return emp ? { kind: 'employee', ...emp } : null;
@@ -318,9 +333,23 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
       fetchEmployees: async () => {
         const { supabase } = await import('./supabase');
         if (!get().workspaceId) return;
-        const { data } = await supabase.from('usuarios').select('*').eq('workspace_id', get().workspaceId).eq('tipo', 'funcionario');
+        const { data } = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('workspace_id', get().workspaceId)
+          .eq('tipo', 'funcionario')
+          .is('deleted_at', null);
         if (data) {
-          const emps: Employee[] = data.map((e: any) => ({ id: e.id, username: e.username, passwordHash: 'migrated', name: e.nome, permissions: e.permissoes, active: e.ativo, createdAt: e.criado_em }));
+          const emps: Employee[] = data.map((e: any) => ({
+            id: e.id,
+            username: e.username,
+            passwordHash: 'migrated',
+            name: e.nome,
+            permissions: e.permissoes,
+            active: e.ativo,
+            isAdmin: e.is_admin || false,
+            createdAt: e.criado_em
+          }));
           set({ employees: emps });
         }
       },

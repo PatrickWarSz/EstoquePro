@@ -461,3 +461,9 @@ entrypoint = "./functions/asaas-upgrade-sub/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/asaas-upgrade-sub/*.html" ]
+
+[functions.delete-auth-user]
+enabled = true
+verify_jwt = false
+import_map = "./functions/delete-auth-user/deno.json"
+entrypoint = "./functions/delete-auth-user/index.ts"
