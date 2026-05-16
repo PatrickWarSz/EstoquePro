@@ -44,6 +44,8 @@ interface AuthState {
   subscriptionStatus: 'trialing' | 'active' | 'past_due' | 'canceled' | null
   expiryDate: string | null
   asaasPortalUrl: string | null // NOVA LINHA: URL do Portal
+  _realtimeSubscription?: any // listener de realtime
+  _healthCheckInterval?: NodeJS.Timeout // interval de healthcheck
   
   setupAdmin: (input: { username: string; password: string; name: string; companyName?: string; documentId: string; ownerCpf?: string; phone?: string }) => Promise<void>
   login: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>
@@ -56,6 +58,8 @@ interface AuthState {
   resetEmployeePassword: (id: string, newPassword: string) => Promise<void>
   getCurrentUser: () => CurrentUser
   fetchEmployees: () => Promise<void>
+  _setupAccessControl: () => void
+  _cleanupAccessControl: () => void
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -172,6 +176,9 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
   employees: []
 });
 
+        // SEGURANÇA: Ativar monitoramento de acesso em tempo real
+        get()._setupAccessControl();
+
         return { ok: true };
       },
 
@@ -201,6 +208,9 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
       },
 
       logout: () => {
+        // SEGURANÇA: Limpar listeners de acesso antes de logout
+        get()._cleanupAccessControl();
+        
         import('./supabase').then(({ supabase }) => {
           supabase.auth.signOut().then(() => {
             set({ currentUserId: null, workspaceId: null, admin: null, employees:[], subscriptionStatus: null, expiryDate: null, asaasPortalUrl: null });
@@ -313,6 +323,77 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
           const emps: Employee[] = data.map((e: any) => ({ id: e.id, username: e.username, passwordHash: 'migrated', name: e.nome, permissions: e.permissoes, active: e.ativo, createdAt: e.criado_em }));
           set({ employees: emps });
         }
+      },
+
+      // SEGURANÇA: Configurar monitoramento de acesso em tempo real + healthcheck
+      _setupAccessControl: async () => {
+        const { supabase } = await import('./supabase');
+        const state = get();
+        
+        // Limpar qualquer listener/interval anterior
+        get()._cleanupAccessControl();
+
+        // Se for admin, não monitorar
+        if (state.currentUserId === 'admin') return;
+
+        const userId = state.currentUserId;
+        if (!userId) return;
+
+        // 1. REAL-TIME: Escutar mudanças
+        try {
+          const subscription = supabase
+            .from('usuarios')
+            .on('*', { event: '*', schema: 'public', table: 'usuarios', filter: `id=eq.${userId}` }, (payload: any) => {
+              const userData = payload.new;
+              if (userData && userData.ativo === false) {
+                toast.error('Seu acesso foi revogado pelo administrador.');
+                get().logout();
+              }
+            })
+            .subscribe();
+          
+          set({ _realtimeSubscription: subscription } as any);
+        } catch (err) {
+          console.error('Erro ao configurar real-time listener:', err);
+        }
+
+        // 2. HEALTHCHECK: Validar a cada 10 segundos
+        const healthCheckInterval = setInterval(async () => {
+          try {
+            const { data, error } = await supabase
+              .from('usuarios')
+              .select('ativo')
+              .eq('id', userId)
+              .single();
+
+            if (error || !data?.ativo) {
+              toast.error('Seu acesso foi revogado. Faça login novamente.');
+              get().logout();
+            }
+          } catch (err) {
+            console.error('Erro no healthcheck de acesso:', err);
+          }
+        }, 10000);
+
+        set({ _healthCheckInterval: healthCheckInterval } as any);
+      },
+
+      _cleanupAccessControl: () => {
+        const state = get();
+        
+        if (state._realtimeSubscription) {
+          try {
+            state._realtimeSubscription.unsubscribe();
+          } catch (err) {
+            console.error('Erro ao unsubscribe:', err);
+          }
+        }
+        
+        if (state._healthCheckInterval) {
+          clearInterval(state._healthCheckInterval);
+        }
+
+        set({ _realtimeSubscription: undefined, _healthCheckInterval: undefined } as any);
       }
     }),
     { 
