@@ -218,7 +218,8 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
         });
       },
 
-      addEmployee: async ({ username, password, name, permissions }) => {
+      addEmployee: async (input) => {
+        const { username, password, name, permissions } = input
         const { supabase } = await import('./supabase');
         const u = username.toLowerCase().trim();
         const { data: workspace } = await supabase.from('workspaces').select('cnpj_cpf').eq('id', get().workspaceId).single();

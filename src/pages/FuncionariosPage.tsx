@@ -94,6 +94,7 @@ export default function FuncionariosPage() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [isAdminNew, setIsAdminNew] = useState(false)
   const [perms, setPerms] = useState<Permissions>(() => ({
     ...emptyPermissions(),
     estoque: true,
@@ -103,13 +104,12 @@ export default function FuncionariosPage() {
   // Edit state
   const [editName, setEditName] = useState("")
   const [editPerms, setEditPerms] = useState<Permissions>(emptyPermissions())
-  const [resetPassword, setResetPassword] = useState("")
-
-  const resetForm = () => {
+  const [editIsAdmin, setEditIsAdmin] = useState(false)
     setName("")
     setUsername("")
     setPassword("")
     setShowPassword(false)
+    setIsAdminNew(false)
     setPerms({ ...emptyPermissions(), estoque: true, scanner: true })
   }
 
@@ -122,7 +122,7 @@ export default function FuncionariosPage() {
   }
 
   const handleCreate = async () => {
-    const res = await addEmployee({ name, username, password, permissions: perms })
+    const res = await addEmployee({ name, username, password, permissions: perms, isAdmin: isAdminNew })
     if (!res.ok) {
       toast.error(res.error)
       return
@@ -137,12 +137,13 @@ export default function FuncionariosPage() {
     setEditing(emp)
     setEditName(emp.name)
     setEditPerms(emp.permissions)
+    setEditIsAdmin(emp.isAdmin || false)
     setResetPassword("")
   }
 
   const handleSaveEdit = async () => {
     if (!editing) return
-    updateEmployee(editing.id, { name: editName, permissions: editPerms })
+    updateEmployee(editing.id, { name: editName, permissions: editPerms, isAdmin: editIsAdmin })
     if (resetPassword.trim()) {
       await resetEmployeePassword(editing.id, resetPassword.trim())
       toast.success("Senha redefinida")
@@ -194,6 +195,11 @@ export default function FuncionariosPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="truncate font-semibold">{emp.name}</p>
+                      {emp.isAdmin && (
+                        <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-semibold text-warning">
+                          ADMIN
+                        </span>
+                      )}
                       {!emp.active && (
                         <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
                           DESATIVADO
@@ -302,6 +308,16 @@ export default function FuncionariosPage() {
               <Label>Permissões</Label>
               <PermissionsEditor value={perms} onChange={setPerms} />
             </div>
+
+            <div className="rounded-lg border border-warning/30 bg-warning/5 p-3">
+              <label className="flex cursor-pointer items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Acesso de Administrador</p>
+                  <p className="text-xs text-muted-foreground">Pode editar/remover movimentações e gerenciar funcionários</p>
+                </div>
+                <Switch checked={isAdminNew} onCheckedChange={setIsAdminNew} />
+              </label>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpenNew(false)}>Cancelar</Button>
@@ -335,6 +351,16 @@ export default function FuncionariosPage() {
               <div className="space-y-2">
                 <Label>Permissões</Label>
                 <PermissionsEditor value={editPerms} onChange={setEditPerms} />
+              </div>
+
+              <div className="rounded-lg border border-warning/30 bg-warning/5 p-3">
+                <label className="flex cursor-pointer items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Acesso de Administrador</p>
+                    <p className="text-xs text-muted-foreground">Pode editar/remover movimentações e gerenciar funcionários</p>
+                  </div>
+                  <Switch checked={editIsAdmin} onCheckedChange={(v) => setEditIsAdmin(v)} />
+                </label>
               </div>
             </div>
           )}
