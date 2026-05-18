@@ -288,10 +288,10 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
           return;
         }
 
-        // 1. Soft delete no banco — preserva histórico de movimentações
+        // 1. Hard delete — remove completamente do banco
         await supabase
           .from('usuarios')
-          .update({ ativo: false, deleted_at: new Date().toISOString() })
+          .delete()
           .eq('id', id)
           .eq('workspace_id', workspaceId);
 

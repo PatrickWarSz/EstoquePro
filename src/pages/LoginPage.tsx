@@ -131,6 +131,7 @@ navigate("/login", { replace: true })
           return
         }
         toast.success("Bem-vindo!")
+        setLoading(false)
         navigate("/app/estoque", { replace: true })
       }
     } catch (err: any) {

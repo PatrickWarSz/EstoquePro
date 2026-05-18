@@ -371,7 +371,9 @@ export default function ScannerPage() {
   }
 
   const reviewBatch = () => {
-  const toApply = batchRows
+  // Sincroniza todos os tipos com batchType antes de revisar
+  const syncedRows = batchRows.map((r) => ({ ...r, type: batchType }))
+  const toApply = syncedRows
     .map((r) => ({ row: r, n: parseFloat(r.qty) }))
     .filter(({ n }) => !isNaN(n) && n > 0)
 
@@ -392,7 +394,7 @@ export default function ScannerPage() {
   setSummary({
     kind: "batch",
     title: loc?.name || "Lote",
-    type: "saida",
+    type: batchType,
     rows: toApply.map(({ row, n }) => ({
       itemName: row.item.name,
       unit: row.item.unit,
@@ -434,16 +436,17 @@ export default function ScannerPage() {
       })
       closeSheet()
     } else if (summary.kind === "batch") {
+      // Aplica todos os itens preenchidos com o tipo sincronizado do batchType
       const filled = batchRows
         .map((r) => ({ row: r, n: parseFloat(r.qty) }))
         .filter(({ n }) => !isNaN(n) && n > 0)
       filled.forEach(({ row, n }) => {
-  const next = row.type === "entrada" ? row.item.quantity + n : row.item.quantity - n
+  const next = batchType === "entrada" ? row.item.quantity + n : row.item.quantity - n
   updateItemQuantity(
     row.categoryId,
     row.item.id,
     next,
-    row.type,
+    batchType,
     n,
     batchNote.trim() || undefined,
   )
@@ -452,7 +455,7 @@ export default function ScannerPage() {
           itemId: row.item.id,
           itemName: row.item.name,
           unit: row.item.unit,
-          delta: row.type === "entrada" ? n : -n,
+          delta: batchType === "entrada" ? n : -n,
           previousQty: row.item.quantity,
         })
       })
@@ -652,24 +655,25 @@ export default function ScannerPage() {
             <div className="grid max-h-[45vh] gap-2 overflow-y-auto rounded-lg border bg-muted/20 p-2">
               {batchRows.map((row, idx) => {
                 const filled = row.qty.trim() !== "" && parseFloat(row.qty) > 0
+                const syncedType = batchType
                 return (
                   <div
   key={`${row.categoryId}:${row.item.id}`}
   className={`flex items-center gap-3 rounded-md border p-2 transition ${
     !filled ? "bg-card" :
-    row.type === "entrada" ? "border-green-500 bg-green-500/10" : "border-red-500 bg-red-500/10"
+    syncedType === "entrada" ? "border-green-500 bg-green-500/10" : "border-red-500 bg-red-500/10"
   }`}
 >
                       <button
   type="button"
   onClick={() => toggleRowType(idx)}
   className={`shrink-0 rounded-md px-2 py-1 text-xs font-bold transition ${
-    row.type === "entrada" 
+    batchType === "entrada" 
       ? "bg-green-500/20 text-green-700" 
       : "bg-red-500/20 text-red-700"
   }`}
 >
-  {row.type === "entrada" ? "ENT" : "SAÍ"}
+  {batchType === "entrada" ? "ENT" : "SAÍ"}
 </button>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium">
