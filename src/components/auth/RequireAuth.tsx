@@ -24,7 +24,7 @@ export function RequireAuth({
   }
 
   // 2. Se a página é só de admin e ele não é, manda pro estoque
-  if (adminOnly && user.kind !== "admin") {
+  if (adminOnly && user.kind !== "admin" && !user.isAdmin) {
     return <Navigate to="/app/estoque" replace />
   }
 

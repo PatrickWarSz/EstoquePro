@@ -98,11 +98,11 @@ export function TopBar() {
               <DropdownMenuLabel>
                 <div className="font-semibold">{user.name}</div>
                 <div className="text-xs font-normal text-muted-foreground">
-                  @{user.username} · {user.kind === "admin" ? "Administrador" : "Operador"}
+                  @{user.username} · {user.kind === "admin" ? "Administrador" : user.isAdmin ? "Co-Admin" : "Operador"}
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {user.kind === "admin" && (
+              {(user.kind === "admin" || user.isAdmin) && (
                 <DropdownMenuItem onClick={() => navigate("/app/funcionarios")}>
                   <UserIcon className="mr-2 h-4 w-4" />
                   Funcionários

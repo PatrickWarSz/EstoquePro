@@ -40,7 +40,7 @@ export function AppSidebar() {
   ).length;
 
   const operacao = operacaoAll.filter((i) => user?.permissions[i.module]);
-  const isAdmin = user?.kind === "admin";
+  const isAdmin = user?.kind === "admin" || user?.isAdmin === true;
 
   const linkBase =
     "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
