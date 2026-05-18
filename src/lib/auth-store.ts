@@ -372,16 +372,20 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
         // 1. REAL-TIME: Escutar mudanças
         try {
           const subscription = supabase
-            .from('usuarios')
-            .on('*', { event: '*', schema: 'public', table: 'usuarios', filter: `id=eq.${userId}` }, (payload: any) => {
-              const userData = payload.new;
-              if (userData && userData.ativo === false) {
-                toast.error('Seu acesso foi revogado pelo administrador.');
-                get().logout();
+            .channel(`usuarios-${userId}`)
+            .on(
+              'postgres_changes' as any,
+              { event: '*', schema: 'public', table: 'usuarios', filter: `id=eq.${userId}` },
+              (payload: any) => {
+                const userData = payload.new;
+                if (userData && userData.ativo === false) {
+                  toast.error('Seu acesso foi revogado pelo administrador.');
+                  get().logout();
+                }
               }
-            })
+            )
             .subscribe();
-          
+
           set({ _realtimeSubscription: subscription } as any);
         } catch (err) {
           console.error('Erro ao configurar real-time listener:', err);
