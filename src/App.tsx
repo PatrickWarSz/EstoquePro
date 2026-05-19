@@ -17,6 +17,7 @@ import LoginPage from "./pages/LoginPage";
 import FuncionariosPage from "./pages/FuncionariosPage";
 import EmployeeHistoryPage from "./pages/EmployeeHistoryPage";
 import { RequireAuth } from "@/components/auth/RequireAuth";
+import { PwaUpdater } from "@/components/pwa-updater";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <PwaUpdater /> {/* <--- VIGIA DE ATUALIZAÇÃO PWA AQUI */}
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Navigate to="/app/estoque" replace />} />

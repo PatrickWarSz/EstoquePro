@@ -32,12 +32,4 @@ if (isInIframe || isPreviewHost) {
       regs.forEach((r) => r.unregister());
     });
   }
-} else {
-  import("virtual:pwa-register")
-    .then(({ registerSW }) => {
-      registerSW({ immediate: true });
-    })
-    .catch(() => {
-      /* PWA opcional - silencioso se falhar */
-    });
 }
