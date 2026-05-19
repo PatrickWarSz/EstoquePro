@@ -39,6 +39,8 @@ export type CurrentUser =
 interface AuthState {
   admin: AdminAccount | null
   employees: Employee[]
+  employeeCursor?: string | null
+  employeesHasMore?: boolean
   currentUserId: string | null 
   workspaceId: string | null 
   subscriptionStatus: 'trialing' | 'active' | 'past_due' | 'canceled' | null
@@ -52,12 +54,13 @@ interface AuthState {
   logout: () => void
   resetPassword: (email: string) => Promise<{ ok: boolean; error?: string }>
   refreshSubscription: () => Promise<void>
+  backupWorkspace: () => Promise<{ ok: boolean; id?: string; error?: string }>
   addEmployee: (input: { username: string; password: string; name: string; permissions: any; isAdmin?: boolean }) => Promise<{ ok: boolean; id?: string; error?: string }>
   updateEmployee: (id: string, updates: Partial<Employee>) => void
   removeEmployee: (id: string) => Promise<void>
   resetEmployeePassword: (id: string, newPassword: string) => Promise<void>
   getCurrentUser: () => CurrentUser
-  fetchEmployees: () => Promise<void>
+  fetchEmployees: (limit?: number, append?: boolean) => Promise<void>
   _setupAccessControl: () => void
   _cleanupAccessControl: () => void
 }
@@ -207,6 +210,47 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
         }
       },
 
+      backupWorkspace: async () => {
+        try {
+          const { supabase } = await import('./supabase');
+          const workspaceId = get().workspaceId;
+          if (!workspaceId) return { ok: false, error: 'No workspace' };
+
+          const [usuariosRes, produtosRes, categoriasRes, movimentacoesRes, locaisRes, pedidosRes, fornecedoresRes] = await Promise.all([
+            supabase.from('usuarios').select('*').eq('workspace_id', workspaceId),
+            supabase.from('produtos').select('*').eq('workspace_id', workspaceId),
+            supabase.from('categorias').select('*').eq('workspace_id', workspaceId),
+            supabase.from('movimentacoes').select('*').eq('workspace_id', workspaceId),
+            supabase.from('locais_estoque').select('*').eq('workspace_id', workspaceId),
+            supabase.from('pedidos').select('*').eq('workspace_id', workspaceId),
+            supabase.from('fornecedores').select('*').eq('workspace_id', workspaceId),
+          ]);
+
+          const backup = {
+            workspaceId,
+            timestamp: new Date().toISOString(),
+            usuarios: usuariosRes.data || [],
+            produtos: produtosRes.data || [],
+            categorias: categoriasRes.data || [],
+            movimentacoes: movimentacoesRes.data || [],
+            locais_estoque: locaisRes.data || [],
+            pedidos: pedidosRes.data || [],
+            fornecedores: fornecedoresRes.data || [],
+          };
+
+          const id = `backup-${Date.now()}`;
+          const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
+          const path = `${workspaceId}/${id}.json`;
+          const { error: upErr } = await supabase.storage.from('backups').upload(path, blob);
+          if (upErr) return { ok: false, error: upErr.message };
+          await supabase.from('backups').insert([{ id, workspace_id: workspaceId, tamanho: blob.size, data_criacao: backup.timestamp }]);
+          return { ok: true, id };
+        } catch (err: any) {
+          console.error('[backupWorkspace]', err);
+          return { ok: false, error: err?.message || String(err) };
+        }
+      },
+
       logout: () => {
         // SEGURANÇA: Limpar listeners de acesso antes de logout
         get()._cleanupAccessControl();
@@ -331,27 +375,56 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
   return null;
 },
 
-      fetchEmployees: async () => {
+      fetchEmployees: async (limit = 50, append = false) => {
         const { supabase } = await import('./supabase');
-        if (!get().workspaceId) return;
-        const { data } = await supabase
+        const workspaceId = get().workspaceId;
+        if (!workspaceId) return;
+
+        // Order by creation date desc, use cursor (criado_em) for pagination
+        let query: any = supabase
           .from('usuarios')
           .select('*')
-          .eq('workspace_id', get().workspaceId)
+          .eq('workspace_id', workspaceId)
           .eq('tipo', 'funcionario')
-          .is('deleted_at', null);
-        if (data) {
-          const emps: Employee[] = data.map((e: any) => ({
-            id: e.id,
-            username: e.username,
-            passwordHash: 'migrated',
-            name: e.nome,
-            permissions: e.permissoes,
-            active: e.ativo,
-            isAdmin: e.is_admin || false,
-            createdAt: e.criado_em
-          }));
-          set({ employees: emps });
+          .is('deleted_at', null)
+          .order('criado_em', { ascending: false })
+          .limit(limit);
+
+        const cursor = get().employeeCursor;
+        if (cursor && append) {
+          // fetch next page older than cursor
+          query = query.gt('criado_em', cursor);
+        }
+
+        const { data, error } = await query;
+        if (error) {
+          console.error('[fetchEmployees] error', error);
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          // no more
+          set({ employeesHasMore: false });
+          return;
+        }
+
+        const emps: Employee[] = data.map((e: any) => ({
+          id: e.id,
+          username: e.username,
+          passwordHash: 'migrated',
+          name: e.nome,
+          permissions: e.permissoes,
+          active: e.ativo,
+          isAdmin: e.is_admin || false,
+          createdAt: e.criado_em,
+        }));
+
+        const nextCursor = data[data.length - 1]?.criado_em || null;
+
+        if (append) {
+          set({ employees: [...get().employees, ...emps], employeeCursor: nextCursor, employeesHasMore: data.length === limit });
+        } else {
+          set({ employees: emps, employeeCursor: nextCursor, employeesHasMore: data.length === limit });
         }
       },
 
@@ -372,14 +445,23 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
         // 1. REAL-TIME: Escutar mudanças
         try {
           const subscription = supabase
-            .from('usuarios')
-            .on('*', { event: '*', schema: 'public', table: 'usuarios', filter: `id=eq.${userId}` }, (payload: any) => {
-              const userData = payload.new;
-              if (userData && userData.ativo === false) {
-                toast.error('Seu acesso foi revogado pelo administrador.');
-                get().logout();
+            .channel(`usuarios-${userId}`)
+            .on(
+              'postgres_changes',
+              {
+                event: '*',
+                schema: 'public',
+                table: 'usuarios',
+                filter: `id=eq.${userId}`
+              },
+              (payload: any) => {
+                const userData = payload.new;
+                if (userData && userData.ativo === false) {
+                  toast.error('Seu acesso foi revogado pelo administrador.');
+                  get().logout();
+                }
               }
-            })
+            )
             .subscribe();
           
           set({ _realtimeSubscription: subscription } as any);
@@ -435,7 +517,9 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
         subscriptionStatus: state.subscriptionStatus,
         expiryDate: state.expiryDate,
         asaasPortalUrl: state.asaasPortalUrl,
-        employees: state.employees
+        employees: state.employees,
+        employeeCursor: state.employeeCursor,
+        employeesHasMore: state.employeesHasMore
       })
     }
   )

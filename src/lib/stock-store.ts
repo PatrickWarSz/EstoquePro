@@ -63,6 +63,9 @@ export interface StockState {
   toggleLocationItem: (id: string, ref: string) => Promise<void>;
   setQrAlias: (k: string, a: QrAlias) => Promise<void>;
   removeQrAlias: (k: string) => Promise<void>;
+  syncPendingMovements: () => Promise<void>;
+  pendingMovementsCount: () => Promise<number>;
+  applyBatchMovements: (moves: Array<{ categoryId: string; itemId: string; newQ: number; type: 'entrada' | 'saida'; movQ: number; note?: string; orderId?: string }>) => Promise<void>;
 }
 
 export const useStockStore = create<StockState>()(
@@ -83,6 +86,9 @@ export const useStockStore = create<StockState>()(
           const { supabase } = await import('./supabase');
           const workspaceId = useAuthStore.getState().workspaceId;
           if (!workspaceId) { set({ loading: false }); return; }
+
+          // Migrate any old localStorage pending queue into IndexedDB before fetching remote data
+          try { const { migrateFromLocalStorage } = await import('./idb-queue'); await migrateFromLocalStorage(); } catch(e) { /* ignore */ }
 
           const [catRes, prodRes, movRes, supRes, locRes, pedRes, entRes, qrRes] = await Promise.all([
             supabase.from('categorias').select('*').eq('workspace_id', workspaceId),
@@ -140,6 +146,15 @@ pricePerUnit: Number(p.preco_por_unidade) || 0,
              }));
           }
           set({ categories, suppliers, locations, orders, qrAliases, selectedCategoryId: categories.length > 0 ? categories[0].id : null, loading: false });
+
+          // Register online handler to attempt sync when connection is restored
+          try {
+            window.addEventListener('online', () => { get().syncPendingMovements(); });
+            // Also refresh pending count / attempt sync now if online
+            if (typeof navigator !== 'undefined' && navigator.onLine) {
+              get().syncPendingMovements();
+            }
+          } catch (_) {}
         } catch { set({ loading: false }); }
       },
 
@@ -173,6 +188,28 @@ pricePerUnit: Number(p.preco_por_unidade) || 0,
         const { supabase } = await import('./supabase');
         const wId = useAuthStore.getState().workspaceId;
         const op = getCurrentOperator();
+
+        // If offline, enqueue the movement and update local state immediately
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          const { enqueuePendingMovementWithRetry } = await import('./idb-queue');
+          const ok = await enqueuePendingMovementWithRetry({ id: generateId(), workspaceId: wId, categoryId: catId, itemId, type, movQ, newQ, note, orderId: orderId || null, operatorId: op.id || null, operatorName: op.name || 'Sistema', date: new Date().toISOString() });
+          if (!ok) { toast.error('Falha ao enfileirar movimento'); return; }
+
+          // Update local categories to reflect new quantity immediately for UX
+          set((state) => {
+            const cats = state.categories.map(c => {
+              if (c.id !== catId) return c;
+              return {
+                ...c,
+                items: c.items.map(i => i.id === itemId ? { ...i, quantity: newQ, history: [{ id: generateId(), type, quantity: movQ, newTotal: newQ, date: new Date().toISOString(), note: note || '' }, ...(i.history || []) ] } : i)
+              };
+            });
+            return { categories: cats } as any;
+          });
+          return;
+        }
+
+        // Online: perform DB updates
         await supabase.from('produtos').update({ quantidade: newQ }).eq('id', itemId).eq('workspace_id', wId);
         await supabase.from('movimentacoes').insert([{ workspace_id: wId, produto_id: itemId, tipo: type, quantidade: movQ, novo_total: newQ, observacao: note, pedido_id: orderId || null, operador_id: op.id !== 'admin' ? op.id : null, nome_operador: op.name || 'Administrador', data: new Date().toISOString() }]);
         await get().initialize();
@@ -336,6 +373,70 @@ if (up.productDescription) dbUp.descricao = up.productDescription;
         const { supabase } = await import('./supabase');
         await supabase.from('aliases_qr').delete().eq('chave', key).eq('workspace_id', useAuthStore.getState().workspaceId);
         await get().initialize();
+      },
+
+      syncPendingMovements: async () => {
+        const { getAllPendingMovements, clearPendingMovements } = await import('./idb-queue');
+        const list = await getAllPendingMovements();
+        if (!list || list.length === 0) return;
+        const { supabase } = await import('./supabase');
+        try {
+          console.log(`[syncPendingMovements] Sincronizando ${list.length} movimentações...`);
+          const inserts = list.map(l => ({ workspace_id: l.workspaceId, produto_id: l.itemId, tipo: l.type, quantidade: l.movQ, novo_total: l.newQ, observacao: l.note || '', pedido_id: l.orderId || null, operador_id: l.operatorId || null, nome_operador: l.operatorName || 'Sistema', data: l.date }));
+          const { error: insErr } = await supabase.from('movimentacoes').insert(inserts);
+          if (insErr) throw new Error(`Falha ao inserir movimentações: ${insErr.message}`);
+          
+          // Update product quantities in parallel
+          const updateErrors: any[] = [];
+          await Promise.all(list.map(async (l) => {
+            const { error: upErr } = await supabase.from('produtos').update({ quantidade: l.newQ }).eq('id', l.itemId).eq('workspace_id', l.workspaceId);
+            if (upErr) updateErrors.push({ item: l.itemId, error: upErr.message });
+          }));
+          
+          if (updateErrors.length > 0) {
+            console.warn('[syncPendingMovements] Alguns updates falharam:', updateErrors);
+          }
+          
+          await clearPendingMovements();
+          await get().initialize();
+          console.log(`[syncPendingMovements] ✓ ${list.length} movimentação(ões) sincronizada(s) com sucesso`);
+          toast.success(`${list.length} movimentação(ões) sincronizada(s)`);
+        } catch (err) {
+          console.error('[syncPendingMovements] Erro:', err);
+          throw err;
+        }
+      },
+
+      pendingMovementsCount: async () => {
+        try { const { countPendingMovements } = await import('./idb-queue'); return await countPendingMovements(); } catch { return 0; }
+      },
+
+      applyBatchMovements: async (moves) => {
+        if (!moves || moves.length === 0) return;
+        const { supabase } = await import('./supabase');
+        const inserts = moves.map(m => ({ workspace_id: useAuthStore.getState().workspaceId, produto_id: m.itemId, tipo: m.type, quantidade: m.movQ, novo_total: m.newQ, observacao: m.note || '', pedido_id: m.orderId || null, operador_id: getCurrentOperator().id || null, nome_operador: getCurrentOperator().name || 'Sistema', data: new Date().toISOString() }));
+        try {
+          const { error: insErr } = await supabase.from('movimentacoes').insert(inserts);
+          if (insErr) throw new Error(`Falha ao aplicar lote: ${insErr.message}`);
+          // Update products quantities in parallel
+          const updateErrors: any[] = [];
+          await Promise.all(moves.map(async (m) => {
+            const { error: upErr } = await supabase.from('produtos').update({ quantidade: m.newQ }).eq('id', m.itemId).eq('workspace_id', useAuthStore.getState().workspaceId);
+            if (upErr) updateErrors.push({ item: m.itemId, error: upErr.message });
+          }));
+          if (updateErrors.length > 0) console.warn('[applyBatchMovements] Update errors:', updateErrors);
+          await get().initialize();
+        } catch (err) {
+          console.error('[applyBatchMovements] erro', err);
+          // On failure, enqueue to pending list so it will be retried
+          const { enqueuePendingMovementWithRetry } = await import('./idb-queue');
+          const failedEnqueues: string[] = [];
+          await Promise.all(moves.map(async (m) => {
+            const ok = await enqueuePendingMovementWithRetry({ id: generateId(), workspaceId: useAuthStore.getState().workspaceId, categoryId: m.categoryId, itemId: m.itemId, type: m.type, movQ: m.movQ, newQ: m.newQ, note: m.note || '', orderId: m.orderId || null, operadorId: getCurrentOperator().id || null, operatorName: getCurrentOperator().name || 'Sistema', date: new Date().toISOString() });
+            if (!ok) failedEnqueues.push(m.itemId);
+          }));
+          if (failedEnqueues.length > 0) console.error('[applyBatchMovements] Falha ao enfileirar alguns itens:', failedEnqueues);
+        }
       },
   }),
     { 

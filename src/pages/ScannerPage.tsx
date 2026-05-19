@@ -90,6 +90,19 @@ export default function ScannerPage() {
   initialize,
 } = useStockStore()
 
+  const [pendingCount, setPendingCount] = useState<number>(0)
+  const [syncing, setSyncing] = useState(false)
+
+  const refreshPendingCount = async () => {
+    try {
+      const { countPendingMovements } = await import('@/lib/idb-queue')
+      const n = await countPendingMovements()
+      setPendingCount(n)
+    } catch {
+      setPendingCount(0)
+    }
+  }
+
   const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null)
   const [movementType, setMovementType] = useState<"entrada" | "saida">("saida")
   const [qty, setQty] = useState("")
@@ -321,6 +334,13 @@ export default function ScannerPage() {
   }
 }, [])
 
+  useEffect(() => {
+    refreshPendingCount()
+    const onOnline = () => { refreshPendingCount(); }
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
+  }, [])
+
   const closeSheet = () => {
     setSelectedItem(null)
     setQty("")
@@ -406,7 +426,7 @@ export default function ScannerPage() {
   })
 }
 
-  const applySummary = () => {
+  const applySummary = async () => {
     if (!summary) return
     const undo: UndoEntry = {
       label:
@@ -436,20 +456,33 @@ export default function ScannerPage() {
       })
       closeSheet()
     } else if (summary.kind === "batch") {
-      // Aplica todos os itens preenchidos com o tipo sincronizado do batchType
+      // Aplica o lote em uma única operação (melhor performance)
       const filled = batchRows
         .map((r) => ({ row: r, n: parseFloat(r.qty) }))
         .filter(({ n }) => !isNaN(n) && n > 0)
+
+      const moves = filled.map(({ row, n }) => ({
+        categoryId: row.categoryId,
+        itemId: row.item.id,
+        newQ: batchType === "entrada" ? row.item.quantity + n : row.item.quantity - n,
+        type: batchType,
+        movQ: n,
+        note: batchNote.trim() || undefined,
+      }))
+
+      // Apply batch via store method
+      try {
+        const { useStockStore } = await import('@/lib/stock-store');
+        await useStockStore.getState().applyBatchMovements(moves as any);
+      } catch (err) {
+        // Fallback: apply individually
+        moves.forEach(m => {
+          updateItemQuantity(m.categoryId, m.itemId, m.newQ, m.type, m.movQ, m.note);
+        })
+      }
+
+      // Build undo
       filled.forEach(({ row, n }) => {
-  const next = batchType === "entrada" ? row.item.quantity + n : row.item.quantity - n
-  updateItemQuantity(
-    row.categoryId,
-    row.item.id,
-    next,
-    batchType,
-    n,
-    batchNote.trim() || undefined,
-  )
         undo.changes.push({
           categoryId: row.categoryId,
           itemId: row.item.id,
@@ -471,6 +504,8 @@ export default function ScannerPage() {
     )
     setSummary(null)
     resumeIfContinuous()
+    // Atualiza contador de pendentes
+    refreshPendingCount()
   }
 
   const undoLast = () => {
@@ -491,6 +526,7 @@ export default function ScannerPage() {
     if (soundOn) beep("success")
     toast.success(`Lançamento revertido (${lastUndo.changes.length} item(ns))`)
     setLastUndo(null)
+    refreshPendingCount()
   }
 
   // ── Bind unknown QR to an existing item/location ───────────
@@ -537,6 +573,14 @@ export default function ScannerPage() {
           Aponte a câmera para o QR de um item ou prateleira para registrar
           entrada/saída.
         </p>
+        <div className="mt-3 flex items-center gap-2">
+          <div className="text-sm text-muted-foreground">Pendentes: <strong>{pendingCount}</strong></div>
+          {pendingCount > 0 && (
+            <Button size="sm" variant="outline" disabled={syncing} onClick={async () => { setSyncing(true); try { await useStockStore.getState().syncPendingMovements(); toast.success(`${pendingCount} movimentação(ões) sincronizada(s)`); } catch (e) { toast.error(`Falha: ${e instanceof Error ? e.message : 'Erro desconhecido'}`) } finally { setSyncing(false); refreshPendingCount(); } }}>
+              {syncing ? '⏳ Sincronizando...' : '🔄 Sincronizar agora'}
+            </Button>
+          )}
+        </div>
       </header>
 
       {/* Mode toggles */}
@@ -873,7 +917,7 @@ export default function ScannerPage() {
 
           <AlertDialogFooter>
             <AlertDialogCancel>Voltar</AlertDialogCancel>
-            <AlertDialogAction onClick={applySummary}>
+            <AlertDialogAction onClick={() => applySummary()}>
               Confirmar
             </AlertDialogAction>
           </AlertDialogFooter>
