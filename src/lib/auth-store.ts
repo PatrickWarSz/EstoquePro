@@ -447,13 +447,8 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
           const subscription = supabase
             .channel(`usuarios-${userId}`)
             .on(
-              'postgres_changes',
-              {
-                event: '*',
-                schema: 'public',
-                table: 'usuarios',
-                filter: `id=eq.${userId}`
-              },
+              'postgres_changes' as any,
+              { event: '*', schema: 'public', table: 'usuarios', filter: `id=eq.${userId}` },
               (payload: any) => {
                 const userData = payload.new;
                 if (userData && userData.ativo === false) {
@@ -463,7 +458,7 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
               }
             )
             .subscribe();
-          
+
           set({ _realtimeSubscription: subscription } as any);
         } catch (err) {
           console.error('Erro ao configurar real-time listener:', err);
