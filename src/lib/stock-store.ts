@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Category, StockItem, HistoryEntry, Supplier, Order, OrderDeliveryEntry, StockLocation } from './types'
 import { useAuthStore } from './auth-store'
+import { toast } from "sonner"
 
 export type QrAlias = { kind: 'item'; categoryId: string; itemId: string } | { kind: 'location'; locationId: string }
 
@@ -441,10 +442,13 @@ if (up.productDescription) dbUp.descricao = up.productDescription;
   }),
     { 
       name: 'estoque-local-v3',
-      // COFRE B2B: Não deixamos o navegador salvar a lista de produtos na máquina.
-      // Salvamos APENAS qual foi a última categoria que o usuário clicou na tela.
+      // MODO OFFLINE ATIVADO: Para o scanner funcionar sem internet no galpão,
+      // nós mantemos uma cópia (cache) dos catálogos na memória do dispositivo.
       partialize: (state) => ({ 
-        selectedCategoryId: state.selectedCategoryId 
+        selectedCategoryId: state.selectedCategoryId,
+        categories: state.categories, // O Scanner precisa disso offline
+        locations: state.locations,   // O Scanner de Prateleiras precisa disso
+        qrAliases: state.qrAliases    // Os links dos QR Codes
       })
     }
   )
