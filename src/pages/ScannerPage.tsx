@@ -386,6 +386,19 @@ useEffect(() => {
   }
   cacheOfflineData()
 }, [categories, locations])
+
+  const closeSheet = () => {
+    setSelectedItem(null)
+    setQty("")
+    setNote("")
+  }
+
+  const reviewMovement = () => {
+    if (!selectedItem) return
+    const n = parseFloat(qty)
+    if (isNaN(n) || n <= 0) {
+      toast.error("Informe uma quantidade válida")
+      return
     }
     if (movementType === "saida" && n > selectedItem.item.quantity) {
       toast.error("Quantidade maior que o saldo")
