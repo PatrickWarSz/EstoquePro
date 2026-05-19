@@ -213,6 +213,7 @@ export default function ScannerPage() {
             : { kind: "location", locationId: alias.locationId }
       }
     }
+    
     if (!payload) {
       if (soundOn) beep("error")
       toast.error("QR Code não reconhecido ou corrompido")
@@ -225,12 +226,31 @@ export default function ScannerPage() {
     if (soundOn) beep("scan")
     await pauseScanner()
 
+    // Try to resolve from local state first
     if (payload.kind === "item") {
       const cat = categories.find((c) => c.id === payload.categoryId)
       const item = cat?.items.find((i) => i.id === payload.itemId)
       if (!item || !cat) {
+        // Fallback: try QR cache (offline)
+        if (!navigator.onLine) {
+          try {
+            const { resolveQrFromCache } = await import('@/lib/qr-cache')
+            const cached = await resolveQrFromCache('local-cache', payload.itemId)
+            if (cached && cached.categoryId && cached.itemId) {
+              // Try to find in local state with cached info
+              const localCat = categories.find(c => c.id === cached.categoryId)
+              const localItem = localCat?.items.find(i => i.id === cached.itemId)
+              if (localItem && localCat) {
+                setSelectedItem({ categoryId: localCat.id, item: localItem })
+                return
+              }
+            }
+          } catch (err) {
+            console.warn('[handleDecoded] Cache lookup failed:', err)
+          }
+        }
         if (soundOn) beep("error")
-        toast.error("Item vinculado ao QR não existe mais")
+        toast.error("Item vinculado ao QR não existe mais (ou sem internet)")
         setUnknownPayload({ kind: "item", key: qrKey(payload), raw: text.trim() })
         return
       }
@@ -341,18 +361,31 @@ export default function ScannerPage() {
     return () => window.removeEventListener('online', onOnline)
   }, [])
 
-  const closeSheet = () => {
-    setSelectedItem(null)
-    setQty("")
-    setNote("")
+// Pre-cache QR metadata on mount for offline resolution
+useEffect(() => {
+  const cacheOfflineData = async () => {
+    if (categories.length > 0 && locations.length >= 0) {
+      try {
+        const { cacheQrMetadata } = await import('@/lib/qr-cache')
+        const itemsForCache = categories.flatMap(cat =>
+          cat.items.map(item => ({
+            id: item.id,
+            name: item.name,
+            categoryId: cat.id,
+            categoryName: cat.name,
+            unit: item.unit,
+            minQuantity: item.minQuantity || 0
+          }))
+        )
+        // Use a dummy workspaceId for local cache (device-specific)
+        await cacheQrMetadata('local-cache', itemsForCache, locations)
+      } catch (err) {
+        console.warn('[ScannerPage] Cache pre-load error:', err)
+      }
+    }
   }
-
-  const reviewMovement = () => {
-    if (!selectedItem) return
-    const n = parseFloat(qty)
-    if (isNaN(n) || n <= 0) {
-      toast.error("Quantidade inválida")
-      return
+  cacheOfflineData()
+}, [categories, locations])
     }
     if (movementType === "saida" && n > selectedItem.item.quantity) {
       toast.error("Quantidade maior que o saldo")

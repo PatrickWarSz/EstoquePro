@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Mail, Phone, User, Truck } from "lucide-react";
+import { Plus, Pencil, Trash2, Mail, Phone, User, Truck, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,9 +11,10 @@ import type { Supplier } from "@/lib/types";
 import { toast } from "sonner";
 
 export default function FornecedoresPage() {
-  const { suppliers, addSupplier, updateSupplier, removeSupplier } = useStockStore();
+  const { suppliers, suppliersHasMore, addSupplier, updateSupplier, removeSupplier, fetchMoreSuppliers } = useStockStore();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Supplier | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [form, setForm] = useState<Omit<Supplier, "id">>({ name: "", contact: "", phone: "", email: "", notes: "" });
 
   const startNew = () => {
@@ -74,6 +75,22 @@ export default function FornecedoresPage() {
             </Card>
           ))}
         </div>
+        {suppliersHasMore && (
+          <div className="mt-6 flex justify-center">
+            <Button 
+              onClick={async () => {
+                setLoadingMore(true);
+                await fetchMoreSuppliers(30, true);
+                setLoadingMore(false);
+              }} 
+              variant="outline" 
+              disabled={loadingMore}
+              className="gap-2"
+            >
+              {loadingMore ? "⏳ Carregando..." : <><ChevronDown className="h-4 w-4" />Carregar mais fornecedores</>}
+            </Button>
+          </div>
+        )}
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

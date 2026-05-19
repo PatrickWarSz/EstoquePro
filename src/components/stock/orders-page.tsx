@@ -113,12 +113,13 @@ function deliveryBadge(status: Order["deliveryStatus"]) {
 type FilterStatus = "all" | "pending" | "late" | "done"
 
 export function OrdersPage() {
-  const { suppliers, orders, categories, addOrder, updateOrder, removeOrder, registerDelivery, updateDelivery, finalizeOrder } =
+  const { suppliers, orders, categories, addOrder, updateOrder, removeOrder, registerDelivery, updateDelivery, finalizeOrder, fetchMoreOrders, ordersHasMore } =
     useStockStore() as StockState
 
   const [search, setSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all")
   const [filterSupplier, setFilterSupplier] = useState("all")
+  const [loadingMore, setLoadingMore] = useState(false)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [deliveryOpen, setDeliveryOpen] = useState<Order | null>(null)
@@ -457,6 +458,22 @@ export function OrdersPage() {
               </Card>
             )
           })}
+        </div>
+      )}
+      {ordersHasMore && filtered.length > 0 && (
+        <div className="mt-6 flex justify-center">
+          <Button
+            onClick={async () => {
+              setLoadingMore(true)
+              await fetchMoreOrders(50, true)
+              setLoadingMore(false)
+            }}
+            variant="outline"
+            disabled={loadingMore}
+            className="gap-2"
+          >
+            {loadingMore ? "⏳ Carregando mais..." : <><ChevronDown className="h-4 w-4" />Carregar mais pedidos</>}
+          </Button>
         </div>
       )}
 

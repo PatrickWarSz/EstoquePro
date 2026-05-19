@@ -39,6 +39,13 @@ export interface StockState {
   loading: boolean;
   clientId: string | null;
   qrAliases: Record<string, QrAlias>;
+  
+  // Pagination state for large lists
+  suppliersCursor: string | null;
+  suppliersHasMore: boolean;
+  ordersCursor: string | null;
+  ordersHasMore: boolean;
+  
   initialize: () => Promise<void>;
   setSelectedCategory: (id: string) => void;
   addItem: (catId: string, item: Omit<StockItem, 'history'>) => Promise<void>;
@@ -67,6 +74,10 @@ export interface StockState {
   syncPendingMovements: () => Promise<void>;
   pendingMovementsCount: () => Promise<number>;
   applyBatchMovements: (moves: Array<{ categoryId: string; itemId: string; newQ: number; type: 'entrada' | 'saida'; movQ: number; note?: string; orderId?: string }>) => Promise<void>;
+  
+  // Pagination fetch functions
+  fetchMoreSuppliers: (limit?: number, append?: boolean) => Promise<void>;
+  fetchMoreOrders: (limit?: number, append?: boolean) => Promise<void>;
 }
 
 export const useStockStore = create<StockState>()(
@@ -80,6 +91,12 @@ export const useStockStore = create<StockState>()(
       loading: false,
       clientId: 'local-user',
       qrAliases: {},
+      
+      // Pagination state
+      suppliersCursor: null,
+      suppliersHasMore: true,
+      ordersCursor: null,
+      ordersHasMore: true,
 
       initialize: async () => {
         set({ loading: true });
@@ -95,9 +112,9 @@ export const useStockStore = create<StockState>()(
             supabase.from('categorias').select('*').eq('workspace_id', workspaceId),
             supabase.from('produtos').select('*').eq('workspace_id', workspaceId),
             supabase.from('movimentacoes').select('*').eq('workspace_id', workspaceId).order('data', { ascending: false }),
-            supabase.from('fornecedores').select('*').eq('workspace_id', workspaceId),
+            supabase.from('fornecedores').select('*').eq('workspace_id', workspaceId).order('criado_em', { ascending: false }).limit(30),
             supabase.from('locais_estoque').select('*').eq('workspace_id', workspaceId),
-            supabase.from('pedidos').select('*').eq('workspace_id', workspaceId).order('criado_em', { ascending: false }),
+            supabase.from('pedidos').select('*').eq('workspace_id', workspaceId).order('criado_em', { ascending: false }).limit(50),
             supabase.from('entregas_pedido').select('*').eq('workspace_id', workspaceId),
             supabase.from('aliases_qr').select('*').eq('workspace_id', workspaceId)
           ]);
@@ -146,7 +163,37 @@ pricePerUnit: Number(p.preco_por_unidade) || 0,
                 }))
              }));
           }
-          set({ categories, suppliers, locations, orders, qrAliases, selectedCategoryId: categories.length > 0 ? categories[0].id : null, loading: false });
+          set({ 
+            categories, 
+            suppliers, 
+            locations, 
+            orders, 
+            qrAliases, 
+            selectedCategoryId: categories.length > 0 ? categories[0].id : null, 
+            loading: false,
+            suppliersCursor: supRes.data && supRes.data.length > 0 ? supRes.data[supRes.data.length - 1].criado_em : null,
+            suppliersHasMore: (supRes.data || []).length === 30,
+            ordersCursor: pedRes.data && pedRes.data.length > 0 ? pedRes.data[pedRes.data.length - 1].criado_em : null,
+            ordersHasMore: (pedRes.data || []).length === 50
+          });
+
+          // Cache QR metadata for offline resolution
+          try {
+            const { cacheQrMetadata } = await import('./qr-cache');
+            const itemsForCache = categories.flatMap(cat => 
+              cat.items.map(item => ({
+                id: item.id,
+                name: item.name,
+                categoryId: cat.id,
+                categoryName: cat.name,
+                unit: item.unit,
+                minQuantity: item.minQuantity || 0
+              }))
+            );
+            await cacheQrMetadata(workspaceId, itemsForCache, locations);
+          } catch (err) {
+            console.warn('[initialize] QR cache error (não crítico):', err);
+          }
 
           // Register online handler to attempt sync when connection is restored
           try {
@@ -438,6 +485,115 @@ if (up.productDescription) dbUp.descricao = up.productDescription;
           }));
           if (failedEnqueues.length > 0) console.error('[applyBatchMovements] Falha ao enfileirar alguns itens:', failedEnqueues);
         }
+      },
+
+      fetchMoreSuppliers: async (limit = 30, append = false) => {
+        const { supabase } = await import('./supabase');
+        const workspaceId = useAuthStore.getState().workspaceId;
+        if (!workspaceId) return;
+
+        let query = supabase
+          .from('fornecedores')
+          .select('*')
+          .eq('workspace_id', workspaceId)
+          .order('criado_em', { ascending: false })
+          .limit(limit);
+
+        const cursor = get().suppliersCursor;
+        if (cursor && append) {
+          query = query.lt('criado_em', cursor); // cursor-based pagination
+        }
+
+        const { data, error } = await query;
+        if (error) {
+          console.error('[fetchMoreSuppliers] error:', error);
+          return;
+        }
+
+        const newSuppliers = (data || []).map(f => ({ 
+          id: f.id, 
+          name: f.nome, 
+          contact: f.contato || '', 
+          phone: f.telefone || '', 
+          email: f.email || '', 
+          notes: f.observacao || '', 
+          cnpj: f.cnpj || '' 
+        }));
+
+        const suppliers = append ? [...get().suppliers, ...newSuppliers] : newSuppliers;
+        const nextCursor = (data || []).length > 0 ? data[data.length - 1]?.criado_em || null : null;
+
+        set({ 
+          suppliers, 
+          suppliersCursor: nextCursor, 
+          suppliersHasMore: (data || []).length === limit 
+        });
+      },
+
+      fetchMoreOrders: async (limit = 50, append = false) => {
+        const { supabase } = await import('./supabase');
+        const workspaceId = useAuthStore.getState().workspaceId;
+        if (!workspaceId) return;
+
+        let query = supabase
+          .from('pedidos')
+          .select('*')
+          .eq('workspace_id', workspaceId)
+          .order('criado_em', { ascending: false })
+          .limit(limit);
+
+        const cursor = get().ordersCursor;
+        if (cursor && append) {
+          query = query.lt('criado_em', cursor); // cursor-based pagination
+        }
+
+        const { data, error } = await query;
+        if (error) {
+          console.error('[fetchMoreOrders] error:', error);
+          return;
+        }
+
+        const { data: entRes } = await supabase.from('entregas_pedido').select('*').eq('workspace_id', workspaceId);
+        const newOrders = (data || []).map(p => {
+          const ents = (entRes || []).filter(e => e.pedido_id === p.id).map(e => ({ 
+            id: e.id, 
+            date: e.data, 
+            quantity: Number(e.quantidade), 
+            stockEntryQuantity: Number(e.quantidade_estoque), 
+            notes: e.observacoes, 
+            createStockEntry: e.gerou_entrada_estoque 
+          }));
+          return { 
+            id: p.id, 
+            supplierId: p.fornecedor_id, 
+            linkedCategoryId: p.categoria_id, 
+            linkedItemId: p.produto_id, 
+            unit: p.unidade, 
+            quantityOrdered: Number(p.quantidade_pedida), 
+            quantityDelivered: Number(p.quantidade_entregue), 
+            expectedDate: p.data_esperada, 
+            deliveryDate: ents.length > 0 ? ents[0].date : undefined, 
+            deadlineStatus: p.status_prazo as any, 
+            deliveryStatus: p.status_entrega as any, 
+            notes: p.observacoes, 
+            stockEntryCreated: p.entrada_estoque_criada, 
+            stockEntryQuantity: Number(p.quantidade_estoque_gerada), 
+            deliveries: ents,
+            productDescription: p.descricao || p.produto_id || 'Pedido sem descrição',
+            orderDate: p.criado_em || new Date().toISOString(), 
+            quantityReturned: 0, 
+            pricePerUnit: Number(p.preco_por_unidade) || 0,
+          };
+        });
+
+        const orders = append ? [...get().orders, ...newOrders] : newOrders;
+        const nextCursor = (data || []).length > 0 ? data[data.length - 1]?.criado_em || null : null;
+
+        set({ 
+          orders, 
+          ordersCursor: nextCursor, 
+          ordersHasMore: (data || []).length === limit 
+        });
       },
   }),
     { 
