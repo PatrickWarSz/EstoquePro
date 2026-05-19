@@ -148,7 +148,7 @@ trialEndDate.setDate(trialEndDate.getDate() + 15);
         // NOVA LINHA: Adicionado asaas_portal_url na busca
         const { data: user, error: dbErr } = await supabase
           .from('usuarios')
-          .select('*, workspaces(status_assinatura, data_vencimento, asaas_portal_url)')
+          .select('*, workspaces(status_assinatura, data_vencimento, asaas_portal_url, cnpj_cpf)')
           .eq('username', u)
           .single();
 
@@ -157,8 +157,12 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
 
         let loginEmail = u;
         if (user.tipo === 'funcionario') {
-          const { data: workspace } = await supabase.from('workspaces').select('cnpj_cpf').eq('id', user.workspace_id).single();
-          loginEmail = `${u}@${workspace?.cnpj_cpf || '00000000000000'}.vexo`;
+          const ws = Array.isArray(user.workspaces) ? user.workspaces[0] : user.workspaces;
+          
+          if (!ws?.cnpj_cpf) {
+            return { ok: false, error: "Cadastro de empresa corrompido." };
+          }
+          loginEmail = `${u}@${ws.cnpj_cpf}.vexo`;
         }
 
         const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
@@ -266,8 +270,13 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
         const { username, password, name, permissions } = input
         const { supabase } = await import('./supabase');
         const u = username.toLowerCase().trim();
-        const { data: workspace } = await supabase.from('workspaces').select('cnpj_cpf').eq('id', get().workspaceId).single();
-        const virtualEmail = `${u}@${workspace?.cnpj_cpf || '00000000000000'}.vexo`;
+        const { data: workspace, error: wsErr } = await supabase.from('workspaces').select('cnpj_cpf').eq('id', get().workspaceId).single();
+        
+        if (wsErr || !workspace?.cnpj_cpf) {
+          return { ok: false, error: "Não foi possível validar a empresa do funcionário. Tente novamente." };
+        }
+
+        const virtualEmail = `${u}@${workspace.cnpj_cpf}.vexo`;
 
         const { createClient } = await import('@supabase/supabase-js');
         const tempClient = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
