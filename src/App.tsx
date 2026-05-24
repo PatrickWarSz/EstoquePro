@@ -13,7 +13,6 @@ import HistoricoPage from "./pages/HistoricoPage";
 import ConfiguracoesPage from "./pages/ConfiguracoesPage";
 import ScannerPage from "./pages/ScannerPage";
 import EtiquetasPage from "./pages/EtiquetasPage";
-import LoginPage from "./pages/LoginPage";
 import FuncionariosPage from "./pages/FuncionariosPage";
 import EmployeeHistoryPage from "./pages/EmployeeHistoryPage";
 import { RequireAuth } from "@/components/auth/RequireAuth";
@@ -27,13 +26,18 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <PwaUpdater /> {/* <--- VIGIA DE ATUALIZAÇÃO PWA AQUI */}
+        <PwaUpdater />
         <BrowserRouter>
           <Routes>
+            {/* Raiz → app diretamente */}
             <Route path="/" element={<Navigate to="/app/estoque" replace />} />
-            <Route path="/login" element={<LoginPage />} />
-            
-            {/* O AppLayout não tem mais RequireAuth bloqueando tudo, o controle é por página */}
+
+            {/* Qualquer tentativa de acessar /login redireciona para o auth centralizado */}
+            <Route
+              path="/login"
+              element={<ExternalRedirect to="https://auth.vexodev.com.br/?app=estoque" />}
+            />
+
             <Route path="/app" element={<AppLayout />}>
               <Route index element={<Navigate to="/app/estoque" replace />} />
               <Route path="estoque" element={<RequireAuth module="estoque"><EstoquePage /></RequireAuth>} />
@@ -47,13 +51,13 @@ const App = () => (
               <Route path="funcionarios/:id/historico" element={<RequireAuth adminOnly><EmployeeHistoryPage /></RequireAuth>} />
             </Route>
 
-            {/* compat com URLs antigas */}
+            {/* Compat com URLs antigas */}
             <Route path="/estoque" element={<Navigate to="/app/estoque" replace />} />
             <Route path="/pedidos" element={<Navigate to="/app/pedidos" replace />} />
             <Route path="/fornecedores" element={<Navigate to="/app/fornecedores" replace />} />
             <Route path="/historico" element={<Navigate to="/app/historico" replace />} />
             <Route path="/configuracoes" element={<Navigate to="/app/configuracoes" replace />} />
-            
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
@@ -61,5 +65,11 @@ const App = () => (
     </ThemeProvider>
   </QueryClientProvider>
 );
+
+// Componente auxiliar para redirect externo via React Router
+function ExternalRedirect({ to }: { to: string }) {
+  window.location.replace(to);
+  return null;
+}
 
 export default App;

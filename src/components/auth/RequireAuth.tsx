@@ -1,6 +1,7 @@
 import { ReactNode } from "react"
-import { Navigate, useLocation } from "react-router-dom"
 import { useAuthStore, ModuleKey } from "@/lib/auth-store"
+
+const AUTH_URL = "https://auth.vexodev.com.br/?app=estoque"
 
 export function RequireAuth({
   children,
@@ -11,35 +12,52 @@ export function RequireAuth({
   module?: ModuleKey
   adminOnly?: boolean
 }) {
-  const location = useLocation()
-  
-  // Pegamos o usuário de forma direta e segura
   const currentUserId = useAuthStore((s) => s.currentUserId)
   const getCurrentUser = useAuthStore((s) => s.getCurrentUser)
+  const subscriptionStatus = useAuthStore((s) => s.subscriptionStatus)
   const user = getCurrentUser()
 
-  // 1. Se não tem usuário, manda pro login e guarda de onde ele veio
+  // 1. Não está logado → auth centralizado
   if (!user || !currentUserId) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+    window.location.replace(AUTH_URL)
+    return null
   }
 
-  // 2. Se a página é só de admin e ele não é, manda pro estoque
+  // 2. Inadimplente ou cancelado → só configurações
+  if (
+    (subscriptionStatus === "past_due" || subscriptionStatus === "canceled") &&
+    module !== "configuracoes"
+  ) {
+    window.location.replace("/app/configuracoes")
+    return null
+  }
+
+  // 3. Página só de admin e ele não é → estoque
   if (adminOnly && user.kind !== "admin" && !user.isAdmin) {
-    return <Navigate to="/app/estoque" replace />
+    window.location.replace("/app/estoque")
+    return null
   }
 
-  // 3. Se a página exige um módulo e ele não tem permissão, acha o primeiro que ele tem
+  // 4. Sem permissão para o módulo → primeiro módulo disponível
   if (module && user.kind !== "admin" && !user.permissions[module]) {
-    const order: ModuleKey[] =["estoque", "scanner", "pedidos", "fornecedores", "historico", "etiquetas", "configuracoes"]
+    const order: ModuleKey[] = [
+      "estoque",
+      "scanner",
+      "pedidos",
+      "fornecedores",
+      "historico",
+      "etiquetas",
+      "configuracoes",
+    ]
     const fallback = order.find((m) => user.permissions[m])
-    
-    // Se ele não tem permissão pra NADA, desloga e manda pro login
     if (!fallback) {
-       return <Navigate to="/login" replace />
+      // Sem nenhum módulo → volta para o auth
+      window.location.replace(AUTH_URL)
+      return null
     }
-    return <Navigate to={`/app/${fallback}`} replace />
+    window.location.replace(`/app/${fallback}`)
+    return null
   }
 
-  // Se passou por toda a segurança, exibe a tela
   return <>{children}</>
 }
