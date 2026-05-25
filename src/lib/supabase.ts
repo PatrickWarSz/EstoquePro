@@ -7,30 +7,38 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
+// PADRÃO OFICIAL: Criando um gerenciador de cookies para compartilhar o login entre subdomínios
+const cookieStorage = {
+  getItem: (key: string) => {
+    if (typeof document === 'undefined') return null;
+    const match = document.cookie.match(new RegExp('(^| )' + key + '=([^;]+)'));
+    return match ? decodeURIComponent(match[2]) : null;
+  },
+  setItem: (key: string, value: string) => {
+    if (typeof document === 'undefined') return;
+    // O ".vexodev.com.br" permite que auth.vexodev e estoque.vexodev leiam a mesma chave
+    document.cookie = `${key}=${encodeURIComponent(value)}; domain=.vexodev.com.br; path=/; max-age=31536000; SameSite=Lax; secure`;
+  },
+  removeItem: (key: string) => {
+    if (typeof document === 'undefined') return;
+    document.cookie = `${key}=; domain=.vexodev.com.br; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+  }
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    // CRÍTICO: Persistir sessão no localStorage para compartilhar entre domínios
     persistSession: true,
-    
-    // CRÍTICO: Detectar mudanças de sessão automaticamente (login em outra aba/domínio)
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    
-    // SEGURANÇA: Usar cookie storage para session sharing cross-domain
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-    
-    // CRÍTICO: Configurar cookies para funcionar em subdomínios (.vexodev.com.br)
-    flowType: 'pkce', // PKCE flow é mais seguro que implicit
+    storage: cookieStorage, // Aqui trocamos o window.localStorage pelo cookieStorage
+    flowType: 'pkce',
   },
 })
 
-// SEGURANÇA: Listener de mudanças de auth (login/logout em auth.vexodev.com.br reflete aqui)
+// Listener de mudanças de auth
 supabase.auth.onAuthStateChange((event, session) => {
   console.log('[Supabase Auth]', event, session?.user?.email || 'no user')
-  
-  // Se o usuário fez logout no auth centralizado, limpar aqui também
   if (event === 'SIGNED_OUT') {
-    // Força limpeza do auth-store via evento customizado
     window.dispatchEvent(new CustomEvent('supabase-signed-out'))
   }
 })
