@@ -63,6 +63,7 @@ interface AuthState {
   fetchEmployees: (limit?: number, append?: boolean) => Promise<void>
   _setupAccessControl: () => void
   _cleanupAccessControl: () => void
+  initializeFromSupabase: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -511,6 +512,78 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
 
         set({ _realtimeSubscription: undefined, _healthCheckInterval: undefined } as any);
       }
+
+,
+
+      // SEGURANÇA: Inicializar sessão a partir do Supabase Auth (SSO multi-app)
+      initializeFromSupabase: async () => {
+        try {
+          const { supabase } = await import('./supabase');
+          
+          // 1. Buscar sessão ativa do Supabase (cookie compartilhado entre auth.vexodev.com.br e app.vexodev.com.br)
+          const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+          
+          if (sessionErr || !session?.user) {
+            console.log('[initializeFromSupabase] Nenhuma sessão ativa encontrada');
+            return;
+          }
+
+          const userId = session.user.id;
+          
+          // 2. Buscar dados do usuário no banco
+          const { data: user, error: dbErr } = await supabase
+            .from('usuarios')
+            .select('*, workspaces(status_assinatura, data_vencimento, asaas_portal_url, cnpj_cpf)')
+            .eq('id', userId)
+            .single();
+
+          if (dbErr || !user) {
+            console.error('[initializeFromSupabase] Usuário não encontrado no banco:', dbErr);
+            return;
+          }
+
+          if (!user.ativo) {
+            console.warn('[initializeFromSupabase] Usuário inativo');
+            return;
+          }
+
+          // 3. Hidratar o estado do auth-store
+          const ws = user.workspaces as any;
+          set({
+            currentUserId: user.tipo === 'admin' ? 'admin' : user.id,
+            workspaceId: user.workspace_id,
+            subscriptionStatus: ws?.status_assinatura || 'trialing',
+            expiryDate: ws?.data_vencimento || null,
+            asaasPortalUrl: ws?.asaas_portal_url || null,
+            admin: user.tipo === 'admin' 
+              ? { username: user.username, passwordHash: 'migrated', name: user.nome } 
+              : null,
+            employees: []
+          });
+
+          // 4. Ativar monitoramento de acesso
+          get()._setupAccessControl();
+
+          // 5. SEGURANÇA: Escutar evento de logout do Supabase (cross-domain)
+          if (typeof window !== 'undefined') {
+            const handleSupabaseSignOut = () => {
+              console.log('[auth-store] Logout detectado via Supabase, limpando estado...');
+              get().logout();
+            };
+            
+            // Remover listener antigo se existir
+            window.removeEventListener('supabase-signed-out', handleSupabaseSignOut);
+            
+            // Adicionar novo listener
+            window.addEventListener('supabase-signed-out', handleSupabaseSignOut);
+          }
+
+          console.log('[initializeFromSupabase] ✅ Sessão restaurada com sucesso');
+        } catch (err) {
+          console.error('[initializeFromSupabase] Erro ao inicializar sessão:', err);
+        }
+      }
+
     }),
     { 
       name: "estoque-auth-v1",
