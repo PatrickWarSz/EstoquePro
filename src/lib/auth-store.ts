@@ -45,9 +45,10 @@ interface AuthState {
   workspaceId: string | null 
   subscriptionStatus: 'trialing' | 'active' | 'past_due' | 'canceled' | null
   expiryDate: string | null
-  asaasPortalUrl: string | null // NOVA LINHA: URL do Portal
-  _realtimeSubscription?: any // listener de realtime
-  _healthCheckInterval?: NodeJS.Timeout // interval de healthcheck
+  asaasPortalUrl: string | null
+  isInitializing: boolean 
+  _realtimeSubscription?: any 
+  _healthCheckInterval?: NodeJS.Timeout
   
   setupAdmin: (input: { username: string; password: string; name: string; companyName?: string; documentId: string; ownerCpf?: string; phone?: string }) => Promise<void>
   login: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>
@@ -69,6 +70,7 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
+      isInitializing: true,
       admin: null,
       employees:[],
       currentUserId: null,
@@ -516,15 +518,17 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
 ,
 
       // SEGURANÇA: Inicializar sessão a partir do Supabase Auth (SSO multi-app)
-      initializeFromSupabase: async () => {
+     initializeFromSupabase: async () => {
+        set({ isInitializing: true }); // <--- 3. Avisa que começou a checar a sessão
         try {
           const { supabase } = await import('./supabase');
           
-          // 1. Buscar sessão ativa do Supabase (cookie compartilhado entre auth.vexodev.com.br e app.vexodev.com.br)
+          // 1. Buscar sessão ativa do Supabase
           const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
           
           if (sessionErr || !session?.user) {
             console.log('[initializeFromSupabase] Nenhuma sessão ativa encontrada');
+            set({ isInitializing: false }); // <--- Finaliza se não achar sessão
             return;
           }
 
@@ -539,11 +543,13 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
 
           if (dbErr || !user) {
             console.error('[initializeFromSupabase] Usuário não encontrado no banco:', dbErr);
+            set({ isInitializing: false }); // <--- Finaliza se não achar usuário
             return;
           }
 
           if (!user.ativo) {
             console.warn('[initializeFromSupabase] Usuário inativo');
+            set({ isInitializing: false }); // <--- Finaliza se o usuário estiver inativo
             return;
           }
 
@@ -564,23 +570,20 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
           // 4. Ativar monitoramento de acesso
           get()._setupAccessControl();
 
-          // 5. SEGURANÇA: Escutar evento de logout do Supabase (cross-domain)
+          // 5. Escutar evento de logout
           if (typeof window !== 'undefined') {
             const handleSupabaseSignOut = () => {
-              console.log('[auth-store] Logout detectado via Supabase, limpando estado...');
               get().logout();
             };
-            
-            // Remover listener antigo se existir
             window.removeEventListener('supabase-signed-out', handleSupabaseSignOut);
-            
-            // Adicionar novo listener
             window.addEventListener('supabase-signed-out', handleSupabaseSignOut);
           }
 
           console.log('[initializeFromSupabase] ✅ Sessão restaurada com sucesso');
+          set({ isInitializing: false }); // <--- Avisa que terminou com sucesso
         } catch (err) {
           console.error('[initializeFromSupabase] Erro ao inicializar sessão:', err);
+          set({ isInitializing: false }); // <--- Finaliza em caso de erro
         }
       }
 

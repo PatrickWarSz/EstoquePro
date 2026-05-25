@@ -15,6 +15,17 @@ export function RequireAuth({
   const currentUserId = useAuthStore((s) => s.currentUserId)
   const getCurrentUser = useAuthStore((s) => s.getCurrentUser)
   const subscriptionStatus = useAuthStore((s) => s.subscriptionStatus)
+  const isInitializing = useAuthStore((s) => s.isInitializing) // <--- Pegando a nova variável
+  
+  // Enquato o Supabase verifica os cookies silenciosamente, mostramos uma tela de carregamento
+  if (isInitializing) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-white">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neutral-900"></div>
+      </div>
+    )
+  }
+
   const user = getCurrentUser()
 
   // 1. Não está logado → auth centralizado
