@@ -86,7 +86,7 @@ export const useAuthStore = create<AuthState>()(
         const u = username.toLowerCase().trim();
         
         const trialEndDate = new Date();
-trialEndDate.setDate(trialEndDate.getDate() + 15);
+        trialEndDate.setDate(trialEndDate.getDate() + 15);
         
         const { data: workspace, error: wErr } = await supabase
           .from('workspaces')
@@ -156,7 +156,7 @@ trialEndDate.setDate(trialEndDate.getDate() + 15);
           .single();
 
         if (dbErr || !user) return { ok: false, error: "Usuário/E-mail ou senha incorretos." };
-if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o administrador." };
+        if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o administrador." };
 
         let loginEmail = u;
         if (user.tipo === 'funcionario') {
@@ -177,14 +177,14 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
 
         const ws = user.workspaces as any;
         set({
-  currentUserId: user.tipo === 'admin' ? 'admin' : user.id,
-  workspaceId: user.workspace_id,
-  subscriptionStatus: ws?.status_assinatura || 'trialing',
-  expiryDate: ws?.data_vencimento || null,
-  asaasPortalUrl: ws?.asaas_portal_url || null,
-  admin: user.tipo === 'admin' ? { username: user.username, passwordHash: 'migrated', name: user.nome } : null,
-  employees: []
-});
+          currentUserId: user.tipo === 'admin' ? 'admin' : user.id,
+          workspaceId: user.workspace_id,
+          subscriptionStatus: ws?.status_assinatura || 'trialing',
+          expiryDate: ws?.data_vencimento || null,
+          asaasPortalUrl: ws?.asaas_portal_url || null,
+          admin: user.tipo === 'admin' ? { username: user.username, passwordHash: 'migrated', name: user.nome } : null,
+          employees: []
+        });
 
         // SEGURANÇA: Ativar monitoramento de acesso em tempo real
         get()._setupAccessControl();
@@ -344,10 +344,10 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
           return;
         }
 
-        // 1. Hard delete — remove completamente do banco
+        // 1. Soft delete no banco — preserva histórico de movimentações (CORREÇÃO APLICADA AQUI)
         await supabase
           .from('usuarios')
-          .delete()
+          .update({ ativo: false, deleted_at: new Date().toISOString() })
           .eq('id', id)
           .eq('workspace_id', workspaceId);
 
@@ -378,14 +378,14 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
       },
 
       getCurrentUser: () => {
-  const { admin, employees, currentUserId } = get();
-  if (currentUserId === 'admin' && admin) return { kind: 'admin', id: 'admin', ...admin, permissions: fullPermissions(), isAdmin: true };
-  if (currentUserId && currentUserId !== 'admin') {
-    const emp = employees.find(e => e.id === currentUserId);
-    return emp ? { kind: 'employee', ...emp } : null;
-  }
-  return null;
-},
+        const { admin, employees, currentUserId } = get();
+        if (currentUserId === 'admin' && admin) return { kind: 'admin', id: 'admin', ...admin, permissions: fullPermissions(), isAdmin: true };
+        if (currentUserId && currentUserId !== 'admin') {
+          const emp = employees.find(e => e.id === currentUserId);
+          return emp ? { kind: 'employee', ...emp } : null;
+        }
+        return null;
+      },
 
       fetchEmployees: async (limit = 50, append = false) => {
         const { supabase } = await import('./supabase');
@@ -513,9 +513,7 @@ if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o 
         }
 
         set({ _realtimeSubscription: undefined, _healthCheckInterval: undefined } as any);
-      }
-
-,
+      },
 
       // SEGURANÇA: Inicializar sessão a partir do Supabase Auth (SSO multi-app)
      initializeFromSupabase: async () => {
