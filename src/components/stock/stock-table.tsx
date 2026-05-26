@@ -114,7 +114,7 @@ export function StockTable({ onViewHistory }: StockTableProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-9 flex-1 text-emerald-600 border-emerald-200"
+                    className="h-9 flex-1 text-success border-success/30 hover:bg-success/10"
                     onClick={() => handleMovement(item.id, "entrada")}
                   >
                     <ArrowUpCircle className="mr-1 h-4 w-4" />
@@ -123,7 +123,7 @@ export function StockTable({ onViewHistory }: StockTableProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-9 flex-1 text-rose-600 border-rose-200"
+                    className="h-9 flex-1 text-destructive border-destructive/30 hover:bg-destructive/10"
                     onClick={() => handleMovement(item.id, "saida")}
                   >
                     <ArrowDownCircle className="mr-1 h-4 w-4" />
@@ -157,11 +157,11 @@ export function StockTable({ onViewHistory }: StockTableProps) {
       {/* Desktop / tablet: table */}
       <Table className="hidden md:table">
         <TableHeader>
-          <TableRow>
-            <TableHead>Material</TableHead>
-            <TableHead>Categoria</TableHead>
-            <TableHead className="text-right">Estoque</TableHead>
-            <TableHead className="text-right">Ações</TableHead>
+          <TableRow className="bg-muted/50">
+            <TableHead className="font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Material</TableHead>
+            <TableHead className="font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Categoria</TableHead>
+            <TableHead className="text-right font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Estoque</TableHead>
+            <TableHead className="text-right font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -172,12 +172,12 @@ export function StockTable({ onViewHistory }: StockTableProps) {
               </TableCell>
             </TableRow>
           ) : (
-            materials.map((item: StockItem & { category: string }) => (
-              <TableRow key={item.id}>
-                <TableCell className="font-medium">{item.name}</TableCell>
-                <TableCell>{item.category}</TableCell>
-                <TableCell className="text-right font-mono">
-                  <span className={item.quantity <= item.minQuantity ? "text-destructive font-bold" : ""}>
+            materials.map((item: StockItem & { category: string }, idx: number) => (
+              <TableRow key={item.id} className={idx % 2 === 1 ? "bg-muted/40" : ""}>
+                <TableCell className="font-medium text-foreground">{item.name}</TableCell>
+                <TableCell className="text-muted-foreground">{item.category}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">
+                  <span className={item.quantity <= item.minQuantity ? "text-destructive font-bold" : "text-foreground"}>
                     {item.quantity} {item.unit}
                   </span>
                 </TableCell>
@@ -186,7 +186,7 @@ export function StockTable({ onViewHistory }: StockTableProps) {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 h-8"
+                      className="text-success border-success/30 hover:bg-success/10 h-8"
                       onClick={() => handleMovement(item.id, "entrada")}
                     >
                       <ArrowUpCircle className="mr-1 h-4 w-4" />
@@ -195,7 +195,7 @@ export function StockTable({ onViewHistory }: StockTableProps) {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-rose-600 border-rose-200 hover:bg-rose-50 h-8"
+                      className="text-destructive border-destructive/30 hover:bg-destructive/10 h-8"
                       onClick={() => handleMovement(item.id, "saida")}
                     >
                       <ArrowDownCircle className="mr-1 h-4 w-4" />
