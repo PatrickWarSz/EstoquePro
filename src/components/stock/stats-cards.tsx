@@ -44,8 +44,8 @@ export function StatsCards({ activeFilter = "all", onFilterChange }: StatsCardsP
       {/* Total — always shown but not a filter */}
       <div className="flex items-center gap-2 pr-2">
         <Package className="h-4 w-4 text-muted-foreground" />
-        <span className="text-muted-foreground">Total:</span>
-        <span className="font-semibold">{stats.total}</span>
+        <span className="font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Total</span>
+        <span className="font-display text-base font-semibold text-foreground tabular-nums">{stats.total}</span>
       </div>
 
       <div className="h-4 w-px bg-border" />
@@ -62,8 +62,8 @@ export function StatsCards({ activeFilter = "all", onFilterChange }: StatsCardsP
         )}
       >
         <CheckCircle2 className="h-4 w-4 text-success" />
-        <span className="text-muted-foreground">Garantido:</span>
-        <span className="font-semibold text-success">{stats.garantido}</span>
+        <span className="font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Garantido</span>
+        <span className="font-display text-base font-semibold text-success tabular-nums">{stats.garantido}</span>
       </button>
 
       <div className="h-4 w-px bg-border" />
@@ -80,8 +80,8 @@ export function StatsCards({ activeFilter = "all", onFilterChange }: StatsCardsP
         )}
       >
         <AlertTriangle className="h-4 w-4 text-warning" />
-        <span className="text-muted-foreground">Baixo:</span>
-        <span className="font-semibold text-warning">{stats.baixo}</span>
+        <span className="font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Baixo</span>
+        <span className="font-display text-base font-semibold text-warning tabular-nums">{stats.baixo}</span>
       </button>
 
       <div className="h-4 w-px bg-border" />
@@ -98,8 +98,8 @@ export function StatsCards({ activeFilter = "all", onFilterChange }: StatsCardsP
         )}
       >
         <XCircle className="h-4 w-4 text-destructive" />
-        <span className="text-muted-foreground">Zerado:</span>
-        <span className="font-semibold text-destructive">{stats.zerado}</span>
+        <span className="font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Zerado</span>
+        <span className="font-display text-base font-semibold text-destructive tabular-nums">{stats.zerado}</span>
       </button>
 
       {isClickable && activeFilter !== "all" && (
