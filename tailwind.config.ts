@@ -11,6 +11,10 @@ export default {
       screens: { "2xl": "1280px" },
     },
     extend: {
+      fontFamily: {
+        display: ['"Space Grotesk"', "Inter", "sans-serif"],
+        mono: ['"JetBrains Mono"', "ui-monospace", "monospace"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
