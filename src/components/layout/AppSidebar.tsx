@@ -1,8 +1,9 @@
-import { Boxes, Package, ShoppingCart, Truck, History, Settings, ScanLine, QrCode, Users } from "lucide-react";
+import { Package, ShoppingCart, Truck, History, Settings, ScanLine, QrCode, Users } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -51,14 +52,21 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border">
         <NavLink to="/app/estoque" className="flex items-center gap-3 px-2 py-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-            <Boxes className="h-5 w-5" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background shadow-sm font-mono-vexo text-[11px] font-medium">
+            <span className="text-primary">&gt;</span>
+            <span className="px-0.5">V</span>
+            <span className="text-primary">&lt;</span>
           </div>
           {!collapsed && (
             <div className="flex flex-col leading-tight">
-              <span className="text-sm font-bold tracking-tight">Estoque Pro</span>
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                Controle de Matéria Prima
+              <span className="font-mono-vexo text-[13px] font-medium tracking-[0.18em] text-foreground">
+                <span className="text-primary">&gt;</span> V E X O <span className="text-primary">&lt;</span>
+              </span>
+              <span className="font-display text-[13px] font-semibold tracking-tight text-foreground">
+                StockKeeper Pro
+              </span>
+              <span className="font-mono-vexo text-[9px] lowercase tracking-[0.18em] text-muted-foreground">
+                software &amp; solutions
               </span>
             </div>
           )}
@@ -126,6 +134,13 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
       </SidebarContent>
+      {!collapsed && (
+        <SidebarFooter className="border-t border-sidebar-border">
+          <div className="px-3 py-2 font-mono-vexo text-[9px] tracking-[0.15em] text-muted-foreground">
+            powered by <span className="text-primary">&gt;</span> V E X O <span className="text-primary">&lt;</span>
+          </div>
+        </SidebarFooter>
+      )}
     </Sidebar>
   );
 }
