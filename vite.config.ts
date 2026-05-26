@@ -35,16 +35,16 @@ export default defineConfig(({ mode }) => ({
         cleanupOutdatedCaches: true,
       },
       manifest: {
-        name: "Estoque Pro",
-        short_name: "Estoque Pro",
+        name: "VEXO StockKeeper Pro",
+        short_name: "StockKeeper",
         description:
-          "Controle de matéria prima e gerenciamento de pedidos de fornecedores.",
+          "StockKeeper Pro by VEXO — controle corporativo de estoque e logística inteligente.",
         start_url: "/",
         scope: "/",
         display: "standalone",
         orientation: "portrait",
-        theme_color: "#ea7a1b",
-        background_color: "#1a1410",
+        theme_color: "#2563EB",
+        background_color: "#FFFFFF",
         lang: "pt-BR",
         id: "/?source=pwa",
         shortcuts: [ // <--- ADICIONE ESTE BLOCO INTEIRO
