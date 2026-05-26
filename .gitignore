@@ -36,3 +36,4 @@ dist-ssr
 bun.lockb
 package-lock.json
 .env
+prq nao ignora
