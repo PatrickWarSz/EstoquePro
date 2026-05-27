@@ -35,10 +35,10 @@ export default defineConfig(({ mode }) => ({
         cleanupOutdatedCaches: true,
       },
       manifest: {
-        name: "VEXO StockKeeper Pro",
-        short_name: "StockKeeper",
+        name: "EstoquePro — VEXO",
+        short_name: "EstoquePro",
         description:
-          "StockKeeper Pro by VEXO — controle corporativo de estoque e logística inteligente.",
+          "O fluxo inteligente da matéria-prima que move sua fábrica.",
         start_url: "/",
         scope: "/",
         display: "standalone",
@@ -77,7 +77,13 @@ export default defineConfig(({ mode }) => ({
             purpose: "any",
           },
           {
-            src: "/pwa-512.png",
+            src: "/pwa-192-maskable.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable",
+          },
+          {
+            src: "/pwa-512-maskable.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",

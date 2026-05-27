@@ -160,7 +160,7 @@ export default function FuncionariosPage() {
     if (!credentialsModal) return ""
     const url = `${window.location.origin}/login`
     // Ajustado para o link ficar em sua própria linha, garantindo que seja clicável no WhatsApp
-    return `Olá ${credentialsModal.name}! 👋\n\nAqui estão suas credenciais de acesso ao Estoque Pro:\n\nLink de acesso:\n${url}\n\nUsuário: ${credentialsModal.username}\nSenha: ${credentialsModal.password}\n\nGuarde com segurança.`
+    return `Olá ${credentialsModal.name}! 👋\n\nAqui estão suas credenciais de acesso ao EstoquePro:\n\nLink de acesso:\n${url}\n\nUsuário: ${credentialsModal.username}\nSenha: ${credentialsModal.password}\n\nGuarde com segurança.`
   }, [credentialsModal])
 
   return (

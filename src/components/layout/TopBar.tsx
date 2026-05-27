@@ -60,7 +60,7 @@ export function TopBar() {
 
       {/* Mobile: brand label centered, search lives inside Estoque page */}
       <div className="sm:hidden flex-1 truncate font-display text-sm font-semibold tracking-tight">
-        StockKeeper Pro
+        EstoquePro
       </div>
 
       <div className="ml-auto flex items-center gap-1 sm:gap-2">

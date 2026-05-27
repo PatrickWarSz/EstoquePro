@@ -62,8 +62,8 @@ export function AppSidebar() {
               <span className="font-mono-vexo text-[13px] font-medium tracking-[0.18em] text-foreground">
                 <span className="text-primary">&gt;</span> V E X O <span className="text-primary">&lt;</span>
               </span>
-              <span className="font-display text-[13px] font-semibold tracking-tight text-foreground">
-                StockKeeper Pro
+              <span className="font-display text-[14px] font-semibold tracking-tight text-foreground">
+                EstoquePro
               </span>
               <span className="font-mono-vexo text-[9px] lowercase tracking-[0.18em] text-muted-foreground">
                 software &amp; solutions
