@@ -175,16 +175,16 @@ export const useAuthStore = create<AuthState>()(
 
         if (authErr || !authData.user) return { ok: false, error: "Usuário/E-mail ou senha incorretos." };
 
-        const ws = user.workspaces as any;
-        set({
-          currentUserId: user.tipo === 'admin' ? 'admin' : user.id,
-          workspaceId: user.workspace_id,
-          subscriptionStatus: ws?.status_assinatura || 'trialing',
-          expiryDate: ws?.data_vencimento || null,
-          asaasPortalUrl: ws?.asaas_portal_url || null,
-          admin: user.tipo === 'admin' ? { username: user.username, passwordHash: 'migrated', name: user.nome } : null,
-          employees: []
-        });
+       const ws = user.workspaces as any;
+set({
+  currentUserId: user.id, // <--- Alterado aqui para usar o ID real
+  workspaceId: user.workspace_id,
+  subscriptionStatus: ws?.status_assinatura || 'trialing',
+  expiryDate: ws?.data_vencimento || null,
+  asaasPortalUrl: ws?.asaas_portal_url || null,
+  admin: user.tipo === 'admin' ? { username: user.username, passwordHash: 'migrated', name: user.nome } : null,
+  employees: []
+});
 
         // SEGURANÇA: Ativar monitoramento de acesso em tempo real
         get()._setupAccessControl();
@@ -420,15 +420,24 @@ export const useAuthStore = create<AuthState>()(
       },
 
       getCurrentUser: () => {
-        const { admin, employees, currentUserId } = get();
-        if (currentUserId === 'admin' && admin) return { kind: 'admin', id: 'admin', ...admin, permissions: fullPermissions(), isAdmin: true };
-        if (currentUserId && currentUserId !== 'admin') {
-          const emp = employees.find(e => e.id === currentUserId);
-          return emp ? { kind: 'employee', ...emp } : null;
-        }
-        return null;
-      },
+  const { admin, employees, currentUserId } = get();
+  if (!currentUserId) return null;
 
+  // Se o objeto 'admin' estiver preenchido no estado, o usuário logado é o Administrador
+  if (admin) {
+    return { 
+      kind: 'admin', 
+      id: currentUserId, // Usa o UUID real dele do banco
+      ...admin, 
+      permissions: fullPermissions(), 
+      isAdmin: true 
+    };
+  }
+
+  // Caso contrário, procura o registro na lista de funcionários
+  const emp = employees.find(e => e.id === currentUserId);
+  return emp ? { kind: 'employee', ...emp } : null;
+},
       fetchEmployees: async (limit = 50, append = false) => {
         const { supabase } = await import('./supabase');
         const workspaceId = get().workspaceId;
@@ -600,18 +609,18 @@ const healthCheckInterval = setInterval(checkAccess, 60000);
           }
 
           // 3. Hidratar o estado do auth-store
-          const ws = user.workspaces as any;
-          set({
-            currentUserId: user.tipo === 'admin' ? 'admin' : user.id,
-            workspaceId: user.workspace_id,
-            subscriptionStatus: ws?.status_assinatura || 'trialing',
-            expiryDate: ws?.data_vencimento || null,
-            asaasPortalUrl: ws?.asaas_portal_url || null,
-            admin: user.tipo === 'admin' 
-              ? { username: user.username, passwordHash: 'migrated', name: user.nome } 
-              : null,
-            employees: []
-          });
+const ws = user.workspaces as any;
+set({
+  currentUserId: user.id, // <--- Alterado aqui também para manter a consistência no refresh
+  workspaceId: user.workspace_id,
+  subscriptionStatus: ws?.status_assinatura || 'trialing',
+  expiryDate: ws?.data_vencimento || null,
+  asaasPortalUrl: ws?.asaas_portal_url || null,
+  admin: user.tipo === 'admin' 
+    ? { username: user.username, passwordHash: 'migrated', name: user.nome } 
+    : null,
+  employees: []
+});
 
           // 4. Ativar monitoramento de acesso
           get()._setupAccessControl();
