@@ -145,7 +145,7 @@ export function SubscriptionPanel({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <CardTitle className="text-xl">Assinatura</CardTitle>
-            <CardDescription>Gerencie seu plano do Estoque PRO</CardDescription>
+            <CardDescription>Gerencie seu plano do EstoquePro</CardDescription>
           </div>
           {statusBadge}
         </div>
