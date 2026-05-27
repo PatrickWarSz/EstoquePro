@@ -34,7 +34,7 @@ ${order.stockEntryQuantity ? `📦 *Lançado no Estoque:* ${order.stockEntryQuan
 ${status}
 ${order.notes ? `\n📝 *Obs:* ${order.notes}` : ""}
 ━━━━━━━━━━━━━━━━━━━━
-_Registrado via Estoque PRO · VEXO_`
+_Registrado via EstoquePro · VEXO_`
 }
 
 export function openWhatsAppWeb(message: string) {
