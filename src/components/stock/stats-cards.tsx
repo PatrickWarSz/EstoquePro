@@ -2,6 +2,7 @@
 import { Package, AlertTriangle, XCircle, CheckCircle2 } from "lucide-react"
 import { useStockStore } from "@/lib/stock-store"
 import { cn } from "@/lib/utils"
+import { Card } from "@/components/ui/card"
 
 type StatusFilter = "all" | "garantido" | "baixo" | "zerado"
 
@@ -39,80 +40,44 @@ export function StatsCards({ activeFilter = "all", onFilterChange }: StatsCardsP
 
   const isClickable = !!onFilterChange
 
+  const cards: Array<{
+    id: StatusFilter
+    label: string
+    value: number
+    icon: typeof Package
+    color: string
+    ringColor: string
+    hoverBg: string
+  }> = [
+    { id: "all", label: "Total", value: stats.total, icon: Package, color: "text-foreground", ringColor: "ring-foreground/30", hoverBg: "hover:bg-muted/60" },
+    { id: "garantido", label: "Garantido", value: stats.garantido, icon: CheckCircle2, color: "text-success", ringColor: "ring-success/40", hoverBg: "hover:bg-success/5" },
+    { id: "baixo", label: "Baixo", value: stats.baixo, icon: AlertTriangle, color: "text-warning", ringColor: "ring-warning/40", hoverBg: "hover:bg-warning/5" },
+    { id: "zerado", label: "Zerado", value: stats.zerado, icon: XCircle, color: "text-destructive", ringColor: "ring-destructive/40", hoverBg: "hover:bg-destructive/5" },
+  ]
+
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-4 py-3 text-sm">
-      {/* Total — always shown but not a filter */}
-      <div className="flex items-center gap-2 pr-2">
-        <Package className="h-4 w-4 text-muted-foreground" />
-        <span className="font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Total</span>
-        <span className="font-display text-base font-semibold text-foreground tabular-nums">{stats.total}</span>
-      </div>
-
-      <div className="h-4 w-px bg-border" />
-
-      {/* Garantido */}
-      <button
-        onClick={() => handleClick("garantido")}
-        disabled={!isClickable}
-        className={cn(
-          "flex items-center gap-2 rounded-md px-2 py-1 transition-colors",
-          isClickable && "cursor-pointer hover:bg-success/10",
-          activeFilter === "garantido" && "bg-success/15 ring-1 ring-success/30",
-          !isClickable && "cursor-default"
-        )}
-      >
-        <CheckCircle2 className="h-4 w-4 text-success" />
-        <span className="font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Garantido</span>
-        <span className="font-display text-base font-semibold text-success tabular-nums">{stats.garantido}</span>
-      </button>
-
-      <div className="h-4 w-px bg-border" />
-
-      {/* Baixo */}
-      <button
-        onClick={() => handleClick("baixo")}
-        disabled={!isClickable}
-        className={cn(
-          "flex items-center gap-2 rounded-md px-2 py-1 transition-colors",
-          isClickable && "cursor-pointer hover:bg-warning/10",
-          activeFilter === "baixo" && "bg-warning/15 ring-1 ring-warning/30",
-          !isClickable && "cursor-default"
-        )}
-      >
-        <AlertTriangle className="h-4 w-4 text-warning" />
-        <span className="font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Baixo</span>
-        <span className="font-display text-base font-semibold text-warning tabular-nums">{stats.baixo}</span>
-      </button>
-
-      <div className="h-4 w-px bg-border" />
-
-      {/* Zerado */}
-      <button
-        onClick={() => handleClick("zerado")}
-        disabled={!isClickable}
-        className={cn(
-          "flex items-center gap-2 rounded-md px-2 py-1 transition-colors",
-          isClickable && "cursor-pointer hover:bg-destructive/10",
-          activeFilter === "zerado" && "bg-destructive/15 ring-1 ring-destructive/30",
-          !isClickable && "cursor-default"
-        )}
-      >
-        <XCircle className="h-4 w-4 text-destructive" />
-        <span className="font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Zerado</span>
-        <span className="font-display text-base font-semibold text-destructive tabular-nums">{stats.zerado}</span>
-      </button>
-
-      {isClickable && activeFilter !== "all" && (
-        <>
-          <div className="h-4 w-px bg-border" />
-          <button
-            onClick={() => onFilterChange("all")}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors px-1"
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {cards.map(({ id, label, value, icon: Icon, color, ringColor, hoverBg }) => {
+        const clickable = isClickable && id !== "all"
+        const active = activeFilter === id && id !== "all"
+        return (
+          <Card
+            key={id}
+            onClick={clickable ? () => handleClick(id) : undefined}
+            className={cn(
+              "p-4 py-3 flex items-center gap-3 transition-colors",
+              clickable && cn("cursor-pointer", hoverBg),
+              active && cn("ring-2", ringColor)
+            )}
           >
-            limpar filtro ✕
-          </button>
-        </>
-      )}
+            <Icon className={cn("h-5 w-5 shrink-0", color)} />
+            <div>
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <p className={cn("text-xl font-bold tabular-nums", color)}>{value}</p>
+            </div>
+          </Card>
+        )
+      })}
     </div>
   )
 }
