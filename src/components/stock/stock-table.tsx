@@ -106,7 +106,7 @@ export function StockTable({ onViewHistory }: StockTableProps) {
                     <p className="truncate text-sm font-semibold">{item.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{item.category}</p>
                   </div>
-                  <div className={`shrink-0 text-right font-mono text-sm ${low ? "text-destructive font-bold" : ""}`}>
+                  <div className={`shrink-0 text-right text-sm tabular-nums ${low ? "text-destructive font-bold" : ""}`}>
                     {item.quantity} <span className="text-xs text-muted-foreground">{item.unit}</span>
                   </div>
                 </div>
