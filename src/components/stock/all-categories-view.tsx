@@ -90,11 +90,6 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
     }
   }
 
-  const getProgressPercent = (item: StockItem) => {
-    if (item.minQuantity === 0) return item.quantity > 0 ? 100 : 0
-    return Math.min(100, Math.round((item.quantity / (item.minQuantity * 2)) * 100))
-  }
-
   if (categories.length === 0) {
     return (
       <Card className="flex h-64 flex-col items-center justify-center gap-3">
