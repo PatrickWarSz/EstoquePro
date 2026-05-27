@@ -66,12 +66,12 @@ export default function AppLayout() {
         
         {subscriptionStatus === 'trialing' ? (
           <p className="mt-4 max-w-md text-muted-foreground leading-relaxed">
-            Seu período de avaliação gratuita do <strong>Estoque PRO</strong> chegou ao fim. 
+            Seu período de avaliação gratuita do <strong>EstoquePro</strong> chegou ao fim. 
             Assine agora para continuar utilizando todas as funcionalidades.
           </p>
         ) : (
           <p className="mt-4 max-w-md text-muted-foreground leading-relaxed">
-            Identificamos uma pendência na sua assinatura do <strong>Estoque PRO</strong>. 
+            Identificamos uma pendência na sua assinatura do <strong>EstoquePro</strong>. 
             Regularize seu pagamento para restaurar o acesso imediato ao sistema.
           </p>
         )}
