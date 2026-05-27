@@ -186,7 +186,7 @@ export function SubscriptionPanel({
                 {annualFeatures.map((f) => (<li key={f} className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-success" /><span>{f}</span></li>))}
               </ul>
               <Button size="lg" className="w-full" onClick={() => handleSubscribe("annual")} disabled={currentPlan === "anual" || upgrading}>
-                {currentPlan === "anual" ? "Seu Plano Atual 🏆" : (status === "active" ? "Fazer UPGRADE para Anual" : "Assinar o Estoque PRO")}
+                {currentPlan === "anual" ? "Seu Plano Atual 🏆" : (status === "active" ? "Fazer UPGRADE para Anual" : "Assinar o EstoquePro")}
               </Button>
             </div>
 
