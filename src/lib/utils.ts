@@ -20,7 +20,7 @@ export function generateDeliveryMessage(
   const toDeliver = order.quantityOrdered - order.quantityDelivered
   const status = toDeliver > 0 ? `⚠️ Saldo pendente: ${toDeliver.toLocaleString("pt-BR")} ${unit}` : `✅ Pedido entregue integralmente`
 
-  return `📦 *REGISTRO DE ENTREGA — ESTOQUE PRO*
+  return `📦 *REGISTRO DE ENTREGA — ESTOQUEPRO*
 ━━━━━━━━━━━━━━━━━━━━
 🏷️ *Produto:* ${order.productDescription}
 🏢 *Fornecedor:* ${supplierName}
