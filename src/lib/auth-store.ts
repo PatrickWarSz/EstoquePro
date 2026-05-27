@@ -270,30 +270,51 @@ export const useAuthStore = create<AuthState>()(
       },
 
       addEmployee: async (input) => {
-        const { username, password, name, permissions } = input
-        const { supabase } = await import('./supabase');
-        const u = username.toLowerCase().trim();
-        const { data: workspace, error: wsErr } = await supabase.from('workspaces').select('cnpj_cpf').eq('id', get().workspaceId).single();
-        
-        if (wsErr || !workspace?.cnpj_cpf) {
-          return { ok: false, error: "Não foi possível validar a empresa do funcionário. Tente novamente." };
-        }
+  const { username, password, name, permissions } = input
+  const { supabase } = await import('./supabase');
+  const workspaceId = get().workspaceId;
+  if (!workspaceId) return { ok: false, error: "Sessão inválida. Faça login novamente." };
 
-        const virtualEmail = `${u}@${workspace.cnpj_cpf}.vexo`;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return { ok: false, error: "Sessão expirada. Faça login novamente." };
 
-        const { createClient } = await import('@supabase/supabase-js');
-        const tempClient = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+    const { data, error } = await supabase.functions.invoke('create-employee-auth', {
+      body: { username, password, name, permissions, isAdmin: input.isAdmin || false, workspaceId },
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
-        const { data: authData, error: authErr } = await tempClient.auth.signUp({ email: virtualEmail, password });
-        if (authErr) return { ok: false, error: authErr.message };
+    if (error || !data?.success) {
+      return { ok: false, error: data?.error || error?.message || "Erro ao criar funcionário." };
+    }
 
-        const { data, error } = await supabase.from('usuarios').insert([{ id: authData.user?.id, workspace_id: get().workspaceId, nome: name, username: u, tipo: 'funcionario', permissoes: permissions, is_admin: input.isAdmin || false, ativo: true, senha_hash: 'migrated_to_auth' }]).select().single();
-        if (error) return { ok: false, error: error.message };
+    // Rebuscar o funcionário recém-criado para hidratar o estado local
+    const { data: newUserData } = await supabase
+      .from('usuarios')
+      .select('*')
+      .eq('id', data.id)
+      .single();
 
-        const newEmp: Employee = { id: data.id, username: data.username, passwordHash: 'migrated', name: data.nome, permissions: data.permissoes, active: data.ativo, isAdmin: data.is_admin || false, createdAt: data.criado_em };
-        set({ employees: [...get().employees, newEmp] });
-        return { ok: true, id: data.id };
-      },
+    if (newUserData) {
+      const newEmp: Employee = {
+        id: newUserData.id,
+        username: newUserData.username,
+        passwordHash: 'migrated',
+        name: newUserData.nome,
+        permissions: newUserData.permissoes,
+        active: newUserData.ativo,
+        isAdmin: newUserData.is_admin || false,
+        createdAt: newUserData.criado_em,
+      };
+      set({ employees: [...get().employees, newEmp] });
+    }
+
+    return { ok: true, id: data.id };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "Erro inesperado ao criar funcionário." };
+  }
+},
 
       updateEmployee: async (id, updates) => {
         const { supabase } = await import('./supabase');
@@ -368,9 +389,30 @@ export const useAuthStore = create<AuthState>()(
       },
 
       resetEmployeePassword: async (id, newPassword) => {
-        toast.info("O reset de senha de funcionários deve ser feito via painel Supabase.");
-      },
+  const { supabase } = await import('./supabase');
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      toast.error("Sessão expirada. Faça login novamente.");
+      return;
+    }
 
+    const { data, error } = await supabase.functions.invoke('reset-employee-password', {
+      body: { employeeId: id, newPassword },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (error || !data?.success) {
+      toast.error(data?.error || "Erro ao redefinir senha.");
+      return;
+    }
+
+    toast.success("Senha redefinida com sucesso.");
+  } catch (err: any) {
+    toast.error(err?.message || "Erro inesperado ao redefinir senha.");
+  }
+},
       resetPassword: async (email) => {
         const { supabase } = await import('./supabase');
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/login` });
@@ -476,23 +518,29 @@ export const useAuthStore = create<AuthState>()(
           console.error('Erro ao configurar real-time listener:', err);
         }
 
-        // 2. HEALTHCHECK: Validar a cada 10 segundos
-        const healthCheckInterval = setInterval(async () => {
-          try {
-            const { data, error } = await supabase
-              .from('usuarios')
-              .select('ativo')
-              .eq('id', userId)
-              .single();
+       // 2. HEALTHCHECK: Validar no foco da aba (quando o usuário volta para a janela)
+// + fallback de 60s para tabs em background sem WebSocket ativo
+const checkAccess = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('ativo')
+      .eq('id', userId)
+      .single();
+    if (error || !data?.ativo) {
+      toast.error('Seu acesso foi revogado. Faça login novamente.');
+      get().logout();
+    }
+  } catch (err) {
+    console.error('Erro no healthcheck de acesso:', err);
+  }
+};
 
-            if (error || !data?.ativo) {
-              toast.error('Seu acesso foi revogado. Faça login novamente.');
-              get().logout();
-            }
-          } catch (err) {
-            console.error('Erro no healthcheck de acesso:', err);
-          }
-        }, 10000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkAccess();
+});
+
+const healthCheckInterval = setInterval(checkAccess, 60000);
 
         set({ _healthCheckInterval: healthCheckInterval } as any);
       },
