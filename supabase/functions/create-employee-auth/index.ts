@@ -5,8 +5,9 @@ const ALLOWED_ORIGINS = [
   'https://app.vexo.com.br',
   'https://www.vexo.com.br',
   'https://app.vexodev.com.br',
+  'https://estoque.vexodev.com.br', // <-- Adicione esta linha
   'https://vexo.com.br',
-  'http://localhost:8080',
+  'http://localhost:8080', // Adicione 'http://localhost:5173' se usar o Vite localmente
 ]
 
 const getCorsHeaders = (origin: string | null) => {
