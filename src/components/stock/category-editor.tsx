@@ -9,6 +9,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -26,6 +36,7 @@ export function CategoryEditor({ open, onOpenChange }: CategoryEditorProps) {
   const [newCategoryName, setNewCategoryName] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState("")
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string; itemCount: number } | null>(null)
 
   const handleAddCategory = () => {
     if (!newCategoryName.trim()) {
@@ -64,15 +75,24 @@ export function CategoryEditor({ open, onOpenChange }: CategoryEditorProps) {
 
   const handleDelete = (id: string, name: string) => {
     const category = (categories || []).find((c) => c.id === id)
-    if (category && category.items.length > 0) {
-      toast.error(
-        `Não é possível excluir "${name}". A categoria possui ${category.items.length} item(s).`
-      )
-      return
-    }
+    setPendingDelete({ id, name, itemCount: category?.items.length ?? 0 })
+  }
 
-    removeCategory(id)
-    toast.success(`Categoria "${name}" removida`)
+  const confirmDelete = async () => {
+    if (!pendingDelete) return
+    const { id, name, itemCount } = pendingDelete
+    try {
+      await removeCategory(id)
+      toast.success(
+        itemCount > 0
+          ? `Categoria "${name}" e ${itemCount} item(s) removidos`
+          : `Categoria "${name}" removida`
+      )
+    } catch (e) {
+      toast.error("Erro ao excluir categoria")
+    } finally {
+      setPendingDelete(null)
+    }
   }
 
   return (
@@ -176,6 +196,33 @@ export function CategoryEditor({ open, onOpenChange }: CategoryEditorProps) {
           <Button onClick={() => onOpenChange(false)}>Fechar</Button>
         </DialogFooter>
       </DialogContent>
+      <AlertDialog open={pendingDelete !== null} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir categoria "{pendingDelete?.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete && pendingDelete.itemCount > 0 ? (
+                <>
+                  Esta categoria possui <strong>{pendingDelete.itemCount} item(s)</strong> cadastrado(s).
+                  Ao continuar, <strong>todos os itens dentro dela serão excluídos permanentemente</strong>.
+                  Esta ação não pode ser desfeita.
+                </>
+              ) : (
+                <>Esta ação não pode ser desfeita.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir tudo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }

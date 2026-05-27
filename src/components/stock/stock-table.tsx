@@ -106,7 +106,7 @@ export function StockTable({ onViewHistory }: StockTableProps) {
                     <p className="truncate text-sm font-semibold">{item.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{item.category}</p>
                   </div>
-                  <div className={`shrink-0 text-right font-mono text-sm ${low ? "text-destructive font-bold" : ""}`}>
+                  <div className={`shrink-0 text-right text-sm tabular-nums ${low ? "text-destructive font-bold" : ""}`}>
                     {item.quantity} <span className="text-xs text-muted-foreground">{item.unit}</span>
                   </div>
                 </div>
@@ -158,10 +158,10 @@ export function StockTable({ onViewHistory }: StockTableProps) {
       <Table className="hidden md:table">
         <TableHeader>
           <TableRow className="bg-muted/50">
-            <TableHead className="font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Material</TableHead>
-            <TableHead className="font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Categoria</TableHead>
-            <TableHead className="text-right font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Estoque</TableHead>
-            <TableHead className="text-right font-mono-vexo text-[10px] uppercase tracking-wider text-muted-foreground">Ações</TableHead>
+            <TableHead className="text-xs font-semibold text-muted-foreground">Material</TableHead>
+            <TableHead className="text-xs font-semibold text-muted-foreground">Categoria</TableHead>
+            <TableHead className="text-right text-xs font-semibold text-muted-foreground">Estoque</TableHead>
+            <TableHead className="text-right text-xs font-semibold text-muted-foreground">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -176,7 +176,7 @@ export function StockTable({ onViewHistory }: StockTableProps) {
               <TableRow key={item.id} className={idx % 2 === 1 ? "bg-muted/40" : ""}>
                 <TableCell className="font-medium text-foreground">{item.name}</TableCell>
                 <TableCell className="text-muted-foreground">{item.category}</TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
+                <TableCell className="text-right tabular-nums">
                   <span className={item.quantity <= item.minQuantity ? "text-destructive font-bold" : "text-foreground"}>
                     {item.quantity} {item.unit}
                   </span>

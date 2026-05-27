@@ -277,7 +277,10 @@ pricePerUnit: Number(p.preco_por_unidade) || 0,
 
       removeCategory: async (id) => {
         const { supabase } = await import('./supabase');
-        await supabase.from('categorias').delete().eq('id', id).eq('workspace_id', useAuthStore.getState().workspaceId);
+        const wId = useAuthStore.getState().workspaceId;
+        // Cascade: remove products belonging to this category first (in case FK ON DELETE is not CASCADE)
+        await supabase.from('produtos').delete().eq('categoria_id', id).eq('workspace_id', wId);
+        await supabase.from('categorias').delete().eq('id', id).eq('workspace_id', wId);
         await get().initialize();
       },
 

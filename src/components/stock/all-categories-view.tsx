@@ -90,11 +90,6 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
     }
   }
 
-  const getProgressPercent = (item: StockItem) => {
-    if (item.minQuantity === 0) return item.quantity > 0 ? 100 : 0
-    return Math.min(100, Math.round((item.quantity / (item.minQuantity * 2)) * 100))
-  }
-
   if (categories.length === 0) {
     return (
       <Card className="flex h-64 flex-col items-center justify-center gap-3">
@@ -183,19 +178,16 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="bg-muted/30">
-                            <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-muted-foreground">
                               Item
                             </th>
-                            <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">
+                            <th className="px-4 py-2 text-right text-xs font-semibold text-muted-foreground whitespace-nowrap">
                               Qtd / Mín
                             </th>
-                            <th className="hidden sm:table-cell px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide w-36">
-                              Nível
-                            </th>
-                            <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            <th className="px-4 py-2 text-right text-xs font-semibold text-muted-foreground">
                               Status
                             </th>
-                            <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            <th className="px-4 py-2 text-right text-xs font-semibold text-muted-foreground">
                               Ações
                             </th>
                           </tr>
@@ -203,7 +195,6 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                         <tbody className="divide-y divide-border">
                           {cat.items.map((item) => {
                             const status = getStatus(item)
-                            const pct = getProgressPercent(item)
                             return (
                               <tr
                                 key={item.id}
@@ -216,9 +207,9 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                                 <td className="px-4 py-2.5 font-medium max-w-[200px] lg:max-w-xs truncate">
                                   {item.name}
                                 </td>
-                                <td className="px-4 py-2.5 text-right whitespace-nowrap font-mono text-xs">
+                                <td className="px-4 py-2.5 text-right whitespace-nowrap text-sm tabular-nums">
                                   <span className={cn(
-                                    "font-semibold text-sm",
+                                    "font-semibold",
                                     status === "zerado" && "text-destructive",
                                     status === "baixo" && "text-warning",
                                   )}>
@@ -230,19 +221,6 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                                     {item.minQuantity.toLocaleString("pt-BR")}
                                   </span>
                                 </td>
-                                <td className="hidden sm:table-cell px-4 py-2.5 w-36">
-                                  <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
-                                    <div
-                                      className={cn(
-                                        "h-full rounded-full transition-all",
-                                        status === "zerado" && "bg-destructive",
-                                        status === "baixo" && "bg-warning",
-                                        status === "garantido" && "bg-success",
-                                      )}
-                                      style={{ width: `${pct}%` }}
-                                    />
-                                  </div>
-                                </td>
                                 <td className="px-4 py-2.5 text-right">
                                   {getStatusBadge(status)}
                                 </td>
@@ -251,7 +229,7 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 h-8"
+                                      className="text-success border-success/30 hover:bg-success/10 h-8"
                                       onClick={() => setMovementDialog({ item, categoryId: cat.id, type: "entrada" })}
                                     >
                                       <ArrowUpCircle className="mr-1 h-4 w-4" />
@@ -260,7 +238,7 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      className="text-rose-600 border-rose-200 hover:bg-rose-50 h-8"
+                                      className="text-destructive border-destructive/30 hover:bg-destructive/10 h-8"
                                       onClick={() => setMovementDialog({ item, categoryId: cat.id, type: "saida" })}
                                     >
                                       <ArrowDownCircle className="mr-1 h-4 w-4" />
