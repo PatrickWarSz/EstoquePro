@@ -56,7 +56,7 @@ interface AuthState {
   resetPassword: (email: string) => Promise<{ ok: boolean; error?: string }>
   refreshSubscription: () => Promise<void>
   backupWorkspace: () => Promise<{ ok: boolean; id?: string; error?: string }>
-  addEmployee: (input: { username: string; password: string; name: string; permissions: any; isAdmin?: boolean }) => Promise<{ ok: boolean; id?: string; error?: string }>
+  addEmployee: (input: { username: string; password: string; name: string; permissions: any; isAdmin?: boolean }) => Promise<{ ok: boolean; id?: string; login?: string; error?: string }>
   updateEmployee: (id: string, updates: Partial<Employee>) => void
   removeEmployee: (id: string) => Promise<void>
   resetEmployeePassword: (id: string, newPassword: string) => Promise<void>
@@ -315,7 +315,7 @@ export const useAuthStore = create<AuthState>()(
       set({ employees: [...get().employees, newEmp] });
     }
 
-    return { ok: true, id: data.id };
+    return { ok: true, id: data.id, login: data.employeeLogin };
   } catch (err: any) {
     return { ok: false, error: err?.message || "Erro inesperado ao criar funcionário." };
   }

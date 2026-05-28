@@ -84,7 +84,7 @@ export default function FuncionariosPage() {
   const removeEmployee = useAuthStore((s) => s.removeEmployee)
   const resetEmployeePassword = useAuthStore((s) => s.resetEmployeePassword)
   const fetchEmployees = useAuthStore((s) => s.fetchEmployees)
-const [workspaceSlug, setWorkspaceSlug] = useState('empresa')
+  const [workspaceSlug, setWorkspaceSlug] = useState('empresa')
 
   useEffect(() => {
     if (workspaceId) fetchEmployees?.()
@@ -95,15 +95,19 @@ useEffect(() => {
   import('@/lib/supabase').then(({ supabase }) => {
     supabase
       .from('workspaces')
-      .select('nome_empresa')
+      .select('nome_empresa, cnpj_cpf, slug')
       .eq('id', workspaceId)
       .single()
       .then(({ data }) => {
-        if (data?.nome_empresa) {
-          const slug = data.nome_empresa
+        if (data) {
+          const slugBase = data.slug || data.nome_empresa || data.cnpj_cpf || 'empresa'
+          const slug = slugBase
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .toLowerCase().replace(/[^a-z0-9]/g, '')
           setWorkspaceSlug(slug || 'empresa')
+          if (!data.slug && slug) {
+            supabase.from('workspaces').update({ slug }).eq('id', workspaceId).then(() => undefined)
+          }
         }
       })
   })
@@ -164,7 +168,7 @@ useEffect(() => {
     setCredentialsModal({
       name: name.trim(),
       username: cleanUsername,
-      login: `${cleanUsername}@${workspaceSlug}`,
+      login: res.login || `${cleanUsername}@${workspaceSlug}`,
       password,
     })
     setOpenNew(false)
@@ -194,10 +198,7 @@ useEffect(() => {
 
   const inviteText = useMemo(() => {
     if (!credentialsModal) return ""
-    const url = `${window.location.origin}/login`
-    // Ajustado para o link ficar em sua própria linha, garantindo que seja clicável no WhatsApp
-    // DEPOIS:
-return `Olá ${credentialsModal.name}! 👋\n\nAqui estão suas credenciais de acesso ao EstoquePro:\n\nLink de acesso:\nhttps://estoque.vexodev.com.br/login\n\nUsuário: ${credentialsModal.login}\nSenha: ${credentialsModal.password}\n\nGuarde com segurança.`
+    return `Olá ${credentialsModal.name}! 👋\n\nAqui estão suas credenciais de acesso ao EstoquePro:\n\nLink de acesso:\nhttps://estoque.vexodev.com.br/login\n\nUsuário: ${credentialsModal.login}\nSenha: ${credentialsModal.password}\n\nGuarde com segurança.`
   }, [credentialsModal])
 
   return (

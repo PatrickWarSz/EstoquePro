@@ -58,7 +58,7 @@ serve(async (req) => {
     const isEmployeeFormat = atIndex > 0 && !rawLogin.slice(atIndex).includes('.')
 
     // FLUXO: DONO (email real como email@gmail.com)
-    if (isOwnerEmail || atIndex < 0) {
+    if (isOwnerEmail) {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: rawLogin,
         password,
@@ -95,43 +95,93 @@ serve(async (req) => {
       )
     }
 
-    // FLUXO: FUNCIONARIO (formato usuario@empresa)
-    if (isEmployeeFormat) {
-      const username = rawLogin.slice(0, atIndex).toLowerCase().trim()
-      const slug     = normalizeSlug(rawLogin.slice(atIndex + 1).trim())
+    // FLUXO: FUNCIONARIO (formato usuario@empresa ou, para compatibilidade, usuario único)
+    if (isEmployeeFormat || atIndex < 0) {
+      const username = (isEmployeeFormat ? rawLogin.slice(0, atIndex) : rawLogin).toLowerCase().trim()
+      const slug = isEmployeeFormat ? normalizeSlug(rawLogin.slice(atIndex + 1).trim()) : ''
 
-      if (!username || !slug) {
+      if (!username || (isEmployeeFormat && !slug)) {
         return new Response(
           JSON.stringify({ error: 'Formato invalido. Use: usuario@empresa' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
 
-      const { data: workspace } = await supabase
-        .from('workspaces')
-        .select('id, cnpj_cpf, nome_empresa, slug')
-        .eq('slug', slug)
-        .maybeSingle()
+      let workspace: any = null
+      let usuario: any = null
 
-      if (!workspace) {
-        return new Response(
-          JSON.stringify({ error: 'Empresa nao encontrada. Verifique o login.' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+      if (slug) {
+        const { data: workspaceBySlug } = await supabase
+          .from('workspaces')
+          .select('id, cnpj_cpf, nome_empresa, slug')
+          .eq('slug', slug)
+          .maybeSingle()
+
+        workspace = workspaceBySlug
+
+        if (!workspace) {
+          const { data: candidates } = await supabase
+            .from('workspaces')
+            .select('id, cnpj_cpf, nome_empresa, slug')
+          workspace = candidates?.find((w) => normalizeSlug(w.nome_empresa || w.cnpj_cpf || '') === slug) ?? null
+        }
+
+        if (!workspace) {
+          return new Response(
+            JSON.stringify({ error: 'Empresa nao encontrada. Verifique o login.' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        const { data: usuarioByWorkspace } = await supabase
+          .from('usuarios')
+          .select('id, workspace_id, nome, username, tipo, permissoes, is_admin, ativo')
+          .eq('workspace_id', workspace.id)
+          .ilike('username', username)
+          .eq('ativo', true)
+          .is('deleted_at', null)
+          .maybeSingle()
+
+        usuario = usuarioByWorkspace
+      } else {
+        const { data: users } = await supabase
+          .from('usuarios')
+          .select('id, workspace_id, nome, username, tipo, permissoes, is_admin, ativo')
+          .ilike('username', username)
+          .eq('tipo', 'funcionario')
+          .eq('ativo', true)
+          .is('deleted_at', null)
+          .limit(2)
+
+        if ((users?.length || 0) > 1) {
+          return new Response(
+            JSON.stringify({ error: 'Informe o usuario no formato usuario@empresa.' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        usuario = users?.[0] ?? null
+
+        if (usuario) {
+          const { data: userWorkspace } = await supabase
+            .from('workspaces')
+            .select('id, cnpj_cpf, nome_empresa, slug')
+            .eq('id', usuario.workspace_id)
+            .maybeSingle()
+          workspace = userWorkspace
+        }
       }
-
-      const { data: usuario } = await supabase
-        .from('usuarios')
-        .select('id, workspace_id, nome, username, tipo, permissoes, is_admin, ativo')
-        .eq('workspace_id', workspace.id)
-        .ilike('username', username)
-        .eq('ativo', true)
-        .is('deleted_at', null)
-        .maybeSingle()
 
       if (!usuario) {
         return new Response(
           JSON.stringify({ error: 'Usuario nao encontrado ou inativo.' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (!workspace?.cnpj_cpf) {
+        return new Response(
+          JSON.stringify({ error: 'Empresa sem CNPJ/CPF cadastrado. Corrija o cadastro da empresa.' }),
           { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }

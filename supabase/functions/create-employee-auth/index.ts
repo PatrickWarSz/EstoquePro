@@ -19,6 +19,15 @@ const getCorsHeaders = (origin: string | null) => {
   return headers
 }
 
+function normalizeSlug(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .trim()
+}
+
 async function verifyAdminToken(req: Request): Promise<{ userId: string; workspaceId: string } | null> {
   const authHeader = req.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) return null
@@ -79,10 +88,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // 3. Buscar cnpj_cpf do workspace para montar o e-mail fantasma
+    // 3. Buscar dados do workspace para montar o e-mail fantasma e o login do convite
     const { data: workspace, error: wsErr } = await supabase
       .from('workspaces')
-      .select('cnpj_cpf')
+      .select('cnpj_cpf, nome_empresa, slug')
       .eq('id', workspaceId)
       .single()
 
@@ -91,6 +100,13 @@ serve(async (req) => {
     }
 
     const u = username.toLowerCase().trim()
+    const workspaceSlug = workspace.slug || normalizeSlug(workspace.nome_empresa || workspace.cnpj_cpf)
+    if (!workspace.slug && workspaceSlug) {
+      await supabase
+        .from('workspaces')
+        .update({ slug: workspaceSlug })
+        .eq('id', workspaceId)
+    }
     const virtualEmail = `${u}@${workspace.cnpj_cpf}.vexo`
 
     // 4. Verificar se username já existe neste workspace (evitar duplicata silenciosa)
@@ -153,7 +169,12 @@ if (orphanAuthUser) {
 
     console.log(`[create-employee-auth] ✓ Funcionário criado | workspace: ${workspaceId} | user: ${u}`)
 
-    return new Response(JSON.stringify({ success: true, id: newUser.id }), {
+    return new Response(JSON.stringify({
+      success: true,
+      id: newUser.id,
+      employeeLogin: `${u}@${workspaceSlug}`,
+      workspaceSlug,
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
 
