@@ -15,9 +15,8 @@ export function RequireAuth({
   const currentUserId = useAuthStore((s) => s.currentUserId)
   const getCurrentUser = useAuthStore((s) => s.getCurrentUser)
   const subscriptionStatus = useAuthStore((s) => s.subscriptionStatus)
-  const isInitializing = useAuthStore((s) => s.isInitializing) // <--- Pegando a nova variável
+  const isInitializing = useAuthStore((s) => s.isInitializing)
   
-  // Enquato o Supabase verifica os cookies silenciosamente, mostramos uma tela de carregamento
   if (isInitializing) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-white">
@@ -28,13 +27,17 @@ export function RequireAuth({
 
   const user = getCurrentUser()
 
-  // 1. Não está logado → auth centralizado
+  // 📡 RADAR DE DEBUG: Mostra na Consola quem está a tentar entrar!
+  console.log("🔍 [RequireAuth] Analisando acesso...", { currentUserId, user, module })
+
+  // 1. Não está logado ou não conseguiu carregar o perfil da tabela 'usuarios'
   if (!user || !currentUserId) {
+    console.warn("🚫 [RequireAuth] Expulso na Condição 1: Perfil (user) não foi carregado da Store!")
     window.location.replace(AUTH_URL)
     return null
   }
 
-  // 2. Inadimplente ou cancelado → só configurações
+  // 2. Inadimplente ou cancelado
   if (
     (subscriptionStatus === "past_due" || subscriptionStatus === "canceled") &&
     module !== "configuracoes"
@@ -43,14 +46,24 @@ export function RequireAuth({
     return null
   }
 
-  // 3. Página só de admin e ele não é → estoque
-  if (adminOnly && user.kind !== "admin" && !user.isAdmin) {
+  // 🔴 CORREÇÃO CHAVE: Aceita as variáveis quer venham em inglês (kind) ou português (tipo do BD)
+  const isUserAdmin = 
+    (user as any).kind === "admin" || 
+    (user as any).tipo === "admin" || 
+    (user as any).isAdmin === true;
+    
+  const permissoes = (user as any).permissions || (user as any).permissoes || {};
+
+  // 3. Página só de admin
+  if (adminOnly && !isUserAdmin) {
+    console.warn("🚫 [RequireAuth] Expulso na Condição 3: Rota exclusiva para Admins.")
     window.location.replace("/app/estoque")
     return null
   }
 
-  // 4. Sem permissão para o módulo → primeiro módulo disponível
-  if (module && user.kind !== "admin" && !user.permissions[module]) {
+  // 4. Sem permissão para o módulo
+  if (module && !isUserAdmin && !permissoes[module]) {
+    console.warn(`🚫 [RequireAuth] Expulso na Condição 4: Falta permissão para '${module}'.`)
     const order: ModuleKey[] = [
       "estoque",
       "scanner",
@@ -60,12 +73,14 @@ export function RequireAuth({
       "etiquetas",
       "configuracoes",
     ]
-    const fallback = order.find((m) => user.permissions[m])
+    const fallback = order.find((m) => permissoes[m])
+    
     if (!fallback) {
-      // Sem nenhum módulo → volta para o auth
+      console.warn("🚫 [RequireAuth] Expulso na Condição 4: Utilizador não tem NENHUMA permissão alternativa (fallback).")
       window.location.replace(AUTH_URL)
       return null
     }
+    
     window.location.replace(`/app/${fallback}`)
     return null
   }
