@@ -77,14 +77,28 @@ function PermissionsEditor({
 }
 
 export default function FuncionariosPage() {
-  const { employees, addEmployee, updateEmployee, removeEmployee, resetEmployeePassword } =
-    useAuthStore()
-    const workspaceSlug = useAuthStore((s) => {
-    const name = s.admin?.companyName ?? ''
-    return name
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase().replace(/[^a-z0-9]/g, '') || 'empresa'
+  // DEPOIS — troca por um estado que busca do banco:
+const workspaceId = useAuthStore((s) => s.workspaceId)
+const [workspaceSlug, setWorkspaceSlug] = useState('empresa')
+
+useEffect(() => {
+  if (!workspaceId) return
+  import('@/lib/supabase').then(({ supabase }) => {
+    supabase
+      .from('workspaces')
+      .select('nome_empresa')
+      .eq('id', workspaceId)
+      .single()
+      .then(({ data }) => {
+        if (data?.nome_empresa) {
+          const slug = data.nome_empresa
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase().replace(/[^a-z0-9]/g, '')
+          setWorkspaceSlug(slug || 'empresa')
+        }
+      })
   })
+}, [workspaceId])
 
   const [openNew, setOpenNew] = useState(false)
   const [editing, setEditing] = useState<Employee | null>(null)
@@ -166,7 +180,8 @@ export default function FuncionariosPage() {
     if (!credentialsModal) return ""
     const url = `${window.location.origin}/login`
     // Ajustado para o link ficar em sua própria linha, garantindo que seja clicável no WhatsApp
-    return `Olá ${credentialsModal.name}! 👋\n\nAqui estão suas credenciais de acesso ao EstoquePro:\n\nLink de acesso:\n${url}\n\nUsuário: ${credentialsModal.username}@${workspaceSlug}\nSenha: ${credentialsModal.password}\n\nGuarde com segurança.`
+    // DEPOIS:
+return `Olá ${credentialsModal.name}! 👋\n\nAqui estão suas credenciais de acesso ao EstoquePro:\n\nLink de acesso:\nhttps://estoque.vexodev.com.br/login\n\nUsuário: ${credentialsModal.username}\nSenha: ${credentialsModal.password}\n\nGuarde com segurança.`
   }, [credentialsModal])
 
   return (

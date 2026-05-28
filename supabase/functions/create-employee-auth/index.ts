@@ -105,6 +105,18 @@ serve(async (req) => {
       throw new Error('Nome de usuário já está em uso neste workspace')
     }
 
+
+    // Após o bloco que verifica duplicata no banco (linha ~60), ANTES do auth.admin.createUser:
+
+// 4b. Verificar se o e-mail virtual já existe no Auth (caso de soft-delete + recriação)
+const { data: { users: existingAuthUsers } } = await supabase.auth.admin.listUsers()
+const orphanAuthUser = existingAuthUsers?.find(u => u.email === virtualEmail)
+
+if (orphanAuthUser) {
+  // Usuário existe no Auth mas não (mais) no banco — limpa o órfão
+  await supabase.auth.admin.deleteUser(orphanAuthUser.id)
+}
+
     // 5. Criar no Supabase Auth com service_role (sem expor tempClient no frontend)
     const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
       email: virtualEmail,
