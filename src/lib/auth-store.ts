@@ -145,51 +145,56 @@ export const useAuthStore = create<AuthState>()(
       },
 
       login: async (username, password) => {
-        const { supabase } = await import('./supabase');
-        const u = username.trim().toLowerCase();
+        const { supabase } = await import('./supabase')
+        const EMPLOYEE_LOGIN_FN =
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/employee-login`
 
-        // NOVA LINHA: Adicionado asaas_portal_url na busca
-        const { data: user, error: dbErr } = await supabase
-          .from('usuarios')
-          .select('*, workspaces(status_assinatura, data_vencimento, asaas_portal_url, cnpj_cpf)')
-          .eq('username', u)
-          .single();
+        try {
+          const res = await fetch(EMPLOYEE_LOGIN_FN, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify({ login: username.trim(), password }),
+          })
 
-        if (dbErr || !user) return { ok: false, error: "Usuário/E-mail ou senha incorretos." };
-        if (!user.ativo) return { ok: false, error: "Seu acesso foi revogado. Contate o administrador." };
-
-        let loginEmail = u;
-        if (user.tipo === 'funcionario') {
-          const ws = Array.isArray(user.workspaces) ? user.workspaces[0] : user.workspaces;
-          
-          if (!ws?.cnpj_cpf) {
-            return { ok: false, error: "Cadastro de empresa corrompido." };
+          const data = await res.json()
+          if (!res.ok || data.error) {
+            return { ok: false, error: data.error ?? 'Usuário ou senha incorretos.' }
           }
-          loginEmail = `${u}@${ws.cnpj_cpf}.vexo`;
+
+          // Injeta a sessão — dispara cookieStorage (SSO entre subdomínios)
+          const { error: sessionErr } = await supabase.auth.setSession({
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+          })
+          if (sessionErr) return { ok: false, error: 'Erro ao estabelecer sessão.' }
+
+          const u = data.user
+          set({
+            currentUserId: u.id,
+            workspaceId: u.workspace_id,
+            subscriptionStatus: 'trialing',
+            expiryDate: null,
+            asaasPortalUrl: null,
+            admin: u.tipo === 'admin'
+              ? { username: u.email, passwordHash: 'migrated', name: u.nome }
+              : null,
+            employees: [],
+          })
+
+          // Atualiza status real da assinatura
+          await get().refreshSubscription()
+
+          // Ativa monitoramento em tempo real
+          get()._setupAccessControl()
+
+          return { ok: true }
+        } catch (err: any) {
+          console.error('[login]', err)
+          return { ok: false, error: 'Não foi possível conectar. Verifique sua internet.' }
         }
-
-        const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
-          email: loginEmail,
-          password: password,
-        });
-
-        if (authErr || !authData.user) return { ok: false, error: "Usuário/E-mail ou senha incorretos." };
-
-       const ws = user.workspaces as any;
-set({
-  currentUserId: user.id, // <--- Alterado aqui para usar o ID real
-  workspaceId: user.workspace_id,
-  subscriptionStatus: ws?.status_assinatura || 'trialing',
-  expiryDate: ws?.data_vencimento || null,
-  asaasPortalUrl: ws?.asaas_portal_url || null,
-  admin: user.tipo === 'admin' ? { username: user.username, passwordHash: 'migrated', name: user.nome } : null,
-  employees: []
-});
-
-        // SEGURANÇA: Ativar monitoramento de acesso em tempo real
-        get()._setupAccessControl();
-
-        return { ok: true };
       },
 
       refreshSubscription: async () => {
