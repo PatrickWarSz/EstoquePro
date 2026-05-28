@@ -32,7 +32,7 @@ export interface AdminAccount {
 }
 
 export type CurrentUser =
-  | { kind: "admin"; id: "admin"; name: string; username: string; permissions: Permissions; isAdmin: true }
+  | { kind: "admin"; id: string; name: string; username: string; permissions: Permissions; isAdmin: true }
   | { kind: "employee"; id: string; name: string; username: string; permissions: Permissions; isAdmin: boolean }
   | null
 
