@@ -115,6 +115,7 @@ useEffect(() => {
   const [credentialsModal, setCredentialsModal] = useState<{
     name: string
     username: string
+    login: string
     password: string
   } | null>(null)
 
@@ -159,7 +160,13 @@ useEffect(() => {
       toast.error(res.error)
       return
     }
-    setCredentialsModal({ name: name.trim(), username: username.trim().toLowerCase(), password })
+    const cleanUsername = username.trim().toLowerCase()
+    setCredentialsModal({
+      name: name.trim(),
+      username: cleanUsername,
+      login: `${cleanUsername}@${workspaceSlug}`,
+      password,
+    })
     setOpenNew(false)
     resetForm()
     toast.success("Funcionário cadastrado")
@@ -190,7 +197,7 @@ useEffect(() => {
     const url = `${window.location.origin}/login`
     // Ajustado para o link ficar em sua própria linha, garantindo que seja clicável no WhatsApp
     // DEPOIS:
-return `Olá ${credentialsModal.name}! 👋\n\nAqui estão suas credenciais de acesso ao EstoquePro:\n\nLink de acesso:\nhttps://estoque.vexodev.com.br/login\n\nUsuário: ${credentialsModal.username}\nSenha: ${credentialsModal.password}\n\nGuarde com segurança.`
+return `Olá ${credentialsModal.name}! 👋\n\nAqui estão suas credenciais de acesso ao EstoquePro:\n\nLink de acesso:\nhttps://estoque.vexodev.com.br/login\n\nUsuário: ${credentialsModal.login}\nSenha: ${credentialsModal.password}\n\nGuarde com segurança.`
   }, [credentialsModal])
 
   return (
@@ -419,7 +426,7 @@ return `Olá ${credentialsModal.name}! 👋\n\nAqui estão suas credenciais de a
               <div className="space-y-1 rounded-lg border bg-muted/40 p-3 text-sm">
                 <div><span className="text-muted-foreground">Nome:</span> <strong>{credentialsModal.name}</strong></div>
                 <div><span className="text-muted-foreground">Link:</span> <code className="text-xs">{window.location.origin}/login</code></div>
-                <div><span className="text-muted-foreground">Usuário:</span> <code className="font-mono">{credentialsModal.username}</code></div>
+                <div><span className="text-muted-foreground">Usuário:</span> <code className="font-mono">{credentialsModal.login}</code></div>
                 <div><span className="text-muted-foreground">Senha:</span> <code className="font-mono">{credentialsModal.password}</code></div>
               </div>
               <div className="flex flex-wrap gap-2">
