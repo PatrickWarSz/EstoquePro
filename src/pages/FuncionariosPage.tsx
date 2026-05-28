@@ -100,7 +100,8 @@ useEffect(() => {
       .single()
       .then(({ data }) => {
         if (data) {
-          const slug = data.slug || data.nome_empresa
+          const slugBase = data.slug || data.nome_empresa || data.cnpj_cpf || 'empresa'
+          const slug = slugBase
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .toLowerCase().replace(/[^a-z0-9]/g, '')
           setWorkspaceSlug(slug || 'empresa')
@@ -194,10 +195,7 @@ useEffect(() => {
 
   const inviteText = useMemo(() => {
     if (!credentialsModal) return ""
-    const url = `${window.location.origin}/login`
-    // Ajustado para o link ficar em sua própria linha, garantindo que seja clicável no WhatsApp
-    // DEPOIS:
-return `Olá ${credentialsModal.name}! 👋\n\nAqui estão suas credenciais de acesso ao EstoquePro:\n\nLink de acesso:\nhttps://estoque.vexodev.com.br/login\n\nUsuário: ${credentialsModal.login}\nSenha: ${credentialsModal.password}\n\nGuarde com segurança.`
+    return `Olá ${credentialsModal.name}! 👋\n\nAqui estão suas credenciais de acesso ao EstoquePro:\n\nLink de acesso:\nhttps://estoque.vexodev.com.br/login\n\nUsuário: ${credentialsModal.login}\nSenha: ${credentialsModal.password}\n\nGuarde com segurança.`
   }, [credentialsModal])
 
   return (
