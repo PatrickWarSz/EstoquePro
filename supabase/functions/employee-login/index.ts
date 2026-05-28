@@ -179,6 +179,13 @@ serve(async (req) => {
         )
       }
 
+      if (!workspace?.cnpj_cpf) {
+        return new Response(
+          JSON.stringify({ error: 'Empresa sem CNPJ/CPF cadastrado. Corrija o cadastro da empresa.' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
       const virtualEmail = username + '@' + workspace.cnpj_cpf + '.vexo'
 
       const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
