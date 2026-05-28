@@ -77,9 +77,18 @@ function PermissionsEditor({
 }
 
 export default function FuncionariosPage() {
-  // DEPOIS — troca por um estado que busca do banco:
-const workspaceId = useAuthStore((s) => s.workspaceId)
+  const workspaceId = useAuthStore((s) => s.workspaceId)
+  const employees = useAuthStore((s) => s.employees)
+  const addEmployee = useAuthStore((s) => s.addEmployee)
+  const updateEmployee = useAuthStore((s) => s.updateEmployee)
+  const removeEmployee = useAuthStore((s) => s.removeEmployee)
+  const resetEmployeePassword = useAuthStore((s) => s.resetEmployeePassword)
+  const fetchEmployees = useAuthStore((s) => s.fetchEmployees)
 const [workspaceSlug, setWorkspaceSlug] = useState('empresa')
+
+  useEffect(() => {
+    if (workspaceId) fetchEmployees?.()
+  }, [workspaceId, fetchEmployees])
 
 useEffect(() => {
   if (!workspaceId) return
