@@ -315,7 +315,7 @@ export const useAuthStore = create<AuthState>()(
       set({ employees: [...get().employees, newEmp] });
     }
 
-    return { ok: true, id: data.id };
+    return { ok: true, id: data.id, login: data.employeeLogin } as any;
   } catch (err: any) {
     return { ok: false, error: err?.message || "Erro inesperado ao criar funcionário." };
   }
