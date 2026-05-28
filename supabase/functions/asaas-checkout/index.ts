@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0"
 // SEGURANÇA: CORS restrito aos domínios da VEXO
 const ALLOWED_ORIGINS = [
   'https://app.vexo.com.br',
+  'https://auth.vexodev.com.br',
   'https://www.vexo.com.br',
   'https://app.vexodev.com.br',
   'https://vexo.com.br',
