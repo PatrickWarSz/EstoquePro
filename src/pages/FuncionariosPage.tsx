@@ -84,7 +84,7 @@ export default function FuncionariosPage() {
   const removeEmployee = useAuthStore((s) => s.removeEmployee)
   const resetEmployeePassword = useAuthStore((s) => s.resetEmployeePassword)
   const fetchEmployees = useAuthStore((s) => s.fetchEmployees)
-const [workspaceSlug, setWorkspaceSlug] = useState('empresa')
+  const [workspaceSlug, setWorkspaceSlug] = useState('empresa')
 
   useEffect(() => {
     if (workspaceId) fetchEmployees?.()
@@ -95,12 +95,12 @@ useEffect(() => {
   import('@/lib/supabase').then(({ supabase }) => {
     supabase
       .from('workspaces')
-      .select('nome_empresa')
+      .select('nome_empresa, cnpj_cpf, slug')
       .eq('id', workspaceId)
       .single()
       .then(({ data }) => {
-        if (data?.nome_empresa) {
-          const slug = data.nome_empresa
+        if (data) {
+          const slug = data.slug || data.nome_empresa
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .toLowerCase().replace(/[^a-z0-9]/g, '')
           setWorkspaceSlug(slug || 'empresa')
@@ -155,7 +155,7 @@ useEffect(() => {
   }
 
   const handleCreate = async () => {
-    const res = await addEmployee({ name, username, password, permissions: perms, isAdmin: isAdminNew })
+    const res = await addEmployee({ name, username, password, permissions: perms, isAdmin: isAdminNew }) as any
     if (!res.ok) {
       toast.error(res.error)
       return
@@ -164,7 +164,7 @@ useEffect(() => {
     setCredentialsModal({
       name: name.trim(),
       username: cleanUsername,
-      login: `${cleanUsername}@${workspaceSlug}`,
+      login: res.login || `${cleanUsername}@${workspaceSlug}`,
       password,
     })
     setOpenNew(false)
