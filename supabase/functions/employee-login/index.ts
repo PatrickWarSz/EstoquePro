@@ -58,7 +58,7 @@ serve(async (req) => {
     const isEmployeeFormat = atIndex > 0 && !rawLogin.slice(atIndex).includes('.')
 
     // FLUXO: DONO (email real como email@gmail.com)
-    if (isOwnerEmail || atIndex < 0) {
+    if (isOwnerEmail) {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: rawLogin,
         password,
@@ -95,22 +95,28 @@ serve(async (req) => {
       )
     }
 
-    // FLUXO: FUNCIONARIO (formato usuario@empresa)
-    if (isEmployeeFormat) {
-      const username = rawLogin.slice(0, atIndex).toLowerCase().trim()
-      const slug     = normalizeSlug(rawLogin.slice(atIndex + 1).trim())
+    // FLUXO: FUNCIONARIO (formato usuario@empresa ou, para compatibilidade, usuario único)
+    if (isEmployeeFormat || atIndex < 0) {
+      const username = (isEmployeeFormat ? rawLogin.slice(0, atIndex) : rawLogin).toLowerCase().trim()
+      const slug = isEmployeeFormat ? normalizeSlug(rawLogin.slice(atIndex + 1).trim()) : ''
 
-      if (!username || !slug) {
+      if (!username || (isEmployeeFormat && !slug)) {
         return new Response(
           JSON.stringify({ error: 'Formato invalido. Use: usuario@empresa' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
 
-      const { data: workspace } = await supabase
+      let workspaceQuery = supabase
         .from('workspaces')
         .select('id, cnpj_cpf, nome_empresa, slug')
-        .eq('slug', slug)
+
+      if (slug) workspaceQuery = workspaceQuery.eq('slug', slug)
+
+      const { data: workspaces } = await workspaceQuery
+        .limit(slug ? 1 : 2)
+
+      const workspace = workspaces?.[0]
         .maybeSingle()
 
       if (!workspace) {
