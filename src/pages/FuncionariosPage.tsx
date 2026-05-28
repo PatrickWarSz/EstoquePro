@@ -105,6 +105,9 @@ useEffect(() => {
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .toLowerCase().replace(/[^a-z0-9]/g, '')
           setWorkspaceSlug(slug || 'empresa')
+          if (!data.slug && slug) {
+            supabase.from('workspaces').update({ slug }).eq('id', workspaceId).then(() => undefined)
+          }
         }
       })
   })
