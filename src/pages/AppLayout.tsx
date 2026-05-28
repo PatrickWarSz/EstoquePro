@@ -69,6 +69,11 @@ export default function AppLayout() {
             Seu período de avaliação gratuita do <strong>EstoquePro</strong> chegou ao fim. 
             Assine agora para continuar utilizando todas as funcionalidades.
           </p>
+        ) : subscriptionStatus === 'canceled' ? (
+          <p className="mt-4 max-w-md text-muted-foreground leading-relaxed">
+            Sua assinatura do <strong>EstoquePro</strong> foi cancelada. 
+            Escolha um plano e assine novamente para restaurar o acesso imediato ao sistema.
+          </p>
         ) : (
           <p className="mt-4 max-w-md text-muted-foreground leading-relaxed">
             Identificamos uma pendência na sua assinatura do <strong>EstoquePro</strong>. 
@@ -77,15 +82,15 @@ export default function AppLayout() {
         )}
 
         <div className="mt-8 flex flex-col sm:flex-row gap-4">
-          {/* Se ele estiver no trial, a gente força ele a ir nas configurações escolher o plano */}
-          {subscriptionStatus === 'trialing' && (
-            <Button asChild size="lg" className="font-bold shadow-md w-full sm:w-auto">
+          {/* Se estiver no trial ou CANCELADO, forçamos a ir nas configurações para assinar novamente */}
+          {(subscriptionStatus === 'trialing' || subscriptionStatus === 'canceled') && (
+            <Button asChild size="lg" className="font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md w-full sm:w-auto">
               <Link to="/app/configuracoes">Escolher Meu Plano</Link>
             </Button>
           )}
 
-          {/* Cliente Assinante Atrasado -> Vai direto pro cofre do Asaas dele */}
-          {subscriptionStatus !== 'trialing' && (
+          {/* Cliente Assinante Atrasado (past_due) -> Vai pro cofre do Asaas pagar a fatura */}
+          {(subscriptionStatus !== 'trialing' && subscriptionStatus !== 'canceled') && (
             <Button size="lg" className="font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md w-full sm:w-auto" onClick={() => window.open(asaasPortalUrl || "https://www.asaas.com", "_blank")}>
               Acessar Portal Financeiro
             </Button>
