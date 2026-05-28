@@ -107,33 +107,70 @@ serve(async (req) => {
         )
       }
 
-      let workspaceQuery = supabase
-        .from('workspaces')
-        .select('id, cnpj_cpf, nome_empresa, slug')
+      let workspace: any = null
+      let usuario: any = null
 
-      if (slug) workspaceQuery = workspaceQuery.eq('slug', slug)
+      if (slug) {
+        const { data: workspaceBySlug } = await supabase
+          .from('workspaces')
+          .select('id, cnpj_cpf, nome_empresa, slug')
+          .eq('slug', slug)
+          .maybeSingle()
 
-      const { data: workspaces } = await workspaceQuery
-        .limit(slug ? 1 : 2)
+        workspace = workspaceBySlug
 
-      const workspace = workspaces?.[0]
-        .maybeSingle()
+        if (!workspace) {
+          const { data: candidates } = await supabase
+            .from('workspaces')
+            .select('id, cnpj_cpf, nome_empresa, slug')
+          workspace = candidates?.find((w) => normalizeSlug(w.nome_empresa || w.cnpj_cpf || '') === slug) ?? null
+        }
 
-      if (!workspace) {
-        return new Response(
-          JSON.stringify({ error: 'Empresa nao encontrada. Verifique o login.' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+        if (!workspace) {
+          return new Response(
+            JSON.stringify({ error: 'Empresa nao encontrada. Verifique o login.' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        const { data: usuarioByWorkspace } = await supabase
+          .from('usuarios')
+          .select('id, workspace_id, nome, username, tipo, permissoes, is_admin, ativo')
+          .eq('workspace_id', workspace.id)
+          .ilike('username', username)
+          .eq('ativo', true)
+          .is('deleted_at', null)
+          .maybeSingle()
+
+        usuario = usuarioByWorkspace
+      } else {
+        const { data: users } = await supabase
+          .from('usuarios')
+          .select('id, workspace_id, nome, username, tipo, permissoes, is_admin, ativo')
+          .ilike('username', username)
+          .eq('tipo', 'funcionario')
+          .eq('ativo', true)
+          .is('deleted_at', null)
+          .limit(2)
+
+        if ((users?.length || 0) > 1) {
+          return new Response(
+            JSON.stringify({ error: 'Informe o usuario no formato usuario@empresa.' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        usuario = users?.[0] ?? null
+
+        if (usuario) {
+          const { data: userWorkspace } = await supabase
+            .from('workspaces')
+            .select('id, cnpj_cpf, nome_empresa, slug')
+            .eq('id', usuario.workspace_id)
+            .maybeSingle()
+          workspace = userWorkspace
+        }
       }
-
-      const { data: usuario } = await supabase
-        .from('usuarios')
-        .select('id, workspace_id, nome, username, tipo, permissoes, is_admin, ativo')
-        .eq('workspace_id', workspace.id)
-        .ilike('username', username)
-        .eq('ativo', true)
-        .is('deleted_at', null)
-        .maybeSingle()
 
       if (!usuario) {
         return new Response(
