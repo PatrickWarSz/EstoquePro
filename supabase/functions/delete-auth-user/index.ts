@@ -2,9 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0"
 
 const ALLOWED_ORIGINS = [
+  'https://auth.vexodev.com.br',
   'https://app.vexodev.com.br',
-  'https://app.vexo.com.br',
-  'http://localhost:8080',
+  'https:estoque.vexodev.com.br',
+  'http://localhost:8080', // desenvolvimento local
 ]
 
 const getCorsHeaders = (origin: string | null) => {
