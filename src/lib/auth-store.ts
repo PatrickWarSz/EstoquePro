@@ -172,6 +172,18 @@ export const useAuthStore = create<AuthState>()(
           if (sessionErr) return { ok: false, error: 'Erro ao estabelecer sessão.' }
 
           const u = data.user
+          
+          const currentEmployee = u.tipo !== 'admin' ? [{
+            id: u.id,
+            username: u.username || u.email,
+            passwordHash: 'migrated',
+            name: u.nome,
+            permissions: u.permissoes || fullPermissions(),
+            active: u.ativo !== false,
+            isAdmin: u.is_admin || false,
+            createdAt: u.criado_em || new Date().toISOString()
+          }] : [];
+
           set({
             currentUserId: u.id,
             workspaceId: u.workspace_id,
@@ -181,7 +193,7 @@ export const useAuthStore = create<AuthState>()(
             admin: u.tipo === 'admin'
               ? { username: u.email, passwordHash: 'migrated', name: u.nome }
               : null,
-            employees: [],
+            employees: currentEmployee,
           })
 
           // Atualiza status real da assinatura
@@ -613,19 +625,31 @@ const healthCheckInterval = setInterval(checkAccess, 60000);
             return;
           }
 
-          // 3. Hidratar o estado do auth-store
-const ws = user.workspaces as any;
-set({
-  currentUserId: user.id, // <--- Alterado aqui também para manter a consistência no refresh
-  workspaceId: user.workspace_id,
-  subscriptionStatus: ws?.status_assinatura || 'trialing',
-  expiryDate: ws?.data_vencimento || null,
-  asaasPortalUrl: ws?.asaas_portal_url || null,
-  admin: user.tipo === 'admin' 
-    ? { username: user.username, passwordHash: 'migrated', name: user.nome } 
-    : null,
-  employees: []
-});
+        // 3. Hidratar o estado do auth-store
+          const ws = user.workspaces as any;
+
+          const currentEmployee = user.tipo !== 'admin' ? [{
+            id: user.id,
+            username: user.username,
+            passwordHash: 'migrated',
+            name: user.nome,
+            permissions: user.permissoes,
+            active: user.ativo,
+            isAdmin: user.is_admin || false,
+            createdAt: user.criado_em
+          }] : [];
+
+          set({
+            currentUserId: user.id, 
+            workspaceId: user.workspace_id,
+            subscriptionStatus: ws?.status_assinatura || 'trialing',
+            expiryDate: ws?.data_vencimento || null,
+            asaasPortalUrl: ws?.asaas_portal_url || null,
+            admin: user.tipo === 'admin' 
+              ? { username: user.username, passwordHash: 'migrated', name: user.nome } 
+              : null,
+            employees: currentEmployee
+          });
 
           // 4. Ativar monitoramento de acesso
           get()._setupAccessControl();
