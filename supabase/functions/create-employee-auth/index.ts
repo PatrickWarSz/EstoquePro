@@ -4,8 +4,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0"
 const ALLOWED_ORIGINS = [
   'https://auth.vexodev.com.br',
   'https://app.vexodev.com.br',
-  'https:estoque.vexodev.com.br',
-  'http://localhost:8080', // desenvolvimento local
+  'https://estoque.vexodev.com.br', // Agora sim, correto!
+  'http://localhost:8080',
 ]
 
 const getCorsHeaders = (origin: string | null) => {
