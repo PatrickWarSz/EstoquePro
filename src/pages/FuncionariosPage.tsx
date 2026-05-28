@@ -79,6 +79,12 @@ function PermissionsEditor({
 export default function FuncionariosPage() {
   const { employees, addEmployee, updateEmployee, removeEmployee, resetEmployeePassword } =
     useAuthStore()
+    const workspaceSlug = useAuthStore((s) => {
+    const name = s.admin?.companyName ?? ''
+    return name
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]/g, '') || 'empresa'
+  })
 
   const [openNew, setOpenNew] = useState(false)
   const [editing, setEditing] = useState<Employee | null>(null)
@@ -160,7 +166,7 @@ export default function FuncionariosPage() {
     if (!credentialsModal) return ""
     const url = `${window.location.origin}/login`
     // Ajustado para o link ficar em sua própria linha, garantindo que seja clicável no WhatsApp
-    return `Olá ${credentialsModal.name}! 👋\n\nAqui estão suas credenciais de acesso ao EstoquePro:\n\nLink de acesso:\n${url}\n\nUsuário: ${credentialsModal.username}\nSenha: ${credentialsModal.password}\n\nGuarde com segurança.`
+    return `Olá ${credentialsModal.name}! 👋\n\nAqui estão suas credenciais de acesso ao EstoquePro:\n\nLink de acesso:\n${url}\n\nUsuário: ${credentialsModal.username}@${workspaceSlug}\nSenha: ${credentialsModal.password}\n\nGuarde com segurança.`
   }, [credentialsModal])
 
   return (
