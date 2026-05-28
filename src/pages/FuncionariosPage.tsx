@@ -155,7 +155,7 @@ useEffect(() => {
   }
 
   const handleCreate = async () => {
-    const res = await addEmployee({ name, username, password, permissions: perms, isAdmin: isAdminNew }) as any
+    const res = await addEmployee({ name, username, password, permissions: perms, isAdmin: isAdminNew })
     if (!res.ok) {
       toast.error(res.error)
       return
