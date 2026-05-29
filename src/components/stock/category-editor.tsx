@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { SortableList } from "@/components/ui/sortable-list"
 import { useStockStore } from "@/lib/stock-store"
 import { toast } from "sonner"
 
@@ -31,7 +32,7 @@ interface CategoryEditorProps {
 }
 
 export function CategoryEditor({ open, onOpenChange }: CategoryEditorProps) {
-  const { categories, addCategory, updateCategory, removeCategory } =
+  const { categories, addCategory, updateCategory, removeCategory, reorderCategories } =
     useStockStore()
   const [newCategoryName, setNewCategoryName] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -122,13 +123,22 @@ export function CategoryEditor({ open, onOpenChange }: CategoryEditorProps) {
           </div>
 
           <ScrollArea className="h-[300px]">
-            <div className="space-y-2 pr-4">
-              {(categories || []).map((category) => (
-                <div
-                  key={category.id}
-                  className="flex items-center gap-2 rounded-lg border bg-card p-2"
-                >
-                  <GripVertical className="h-4 w-4 text-muted-foreground" />
+            <SortableList
+              items={categories || []}
+              onReorder={(ids) => reorderCategories(ids)}
+              className="space-y-2 pr-4"
+              renderItem={(category, handle) => (
+                <div className="flex items-center gap-2 rounded-lg border bg-card p-2">
+                  <button
+                    ref={handle.setActivatorNodeRef}
+                    {...handle.attributes}
+                    {...handle.listeners}
+                    type="button"
+                    aria-label="Mover categoria"
+                    className="cursor-grab touch-none rounded p-0.5 text-muted-foreground hover:bg-muted active:cursor-grabbing"
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </button>
                   {editingId === category.id ? (
                     <>
                       <Input
@@ -187,8 +197,8 @@ export function CategoryEditor({ open, onOpenChange }: CategoryEditorProps) {
                     </>
                   )}
                 </div>
-              ))}
-            </div>
+              )}
+            />
           </ScrollArea>
         </div>
 
