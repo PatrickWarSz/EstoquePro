@@ -180,6 +180,7 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="bg-muted/30">
+                            <th className="w-8 px-2 py-2"></th>
                             <th className="px-4 py-2 text-left text-xs font-semibold text-muted-foreground">
                               Item
                             </th>
