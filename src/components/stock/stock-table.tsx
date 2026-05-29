@@ -1,6 +1,6 @@
 
 import { useMemo, useState } from "react"
-import { ArrowUpCircle, ArrowDownCircle, MoreHorizontal, History, PenSquare, Trash2 } from "lucide-react"
+import { ArrowUpCircle, ArrowDownCircle, MoreHorizontal, History, PenSquare, Trash2, GripVertical } from "lucide-react"
 import { useStockStore } from "@/lib/stock-store"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { MovementDialog } from "./movement-dialog"
 import { EditItemDialog } from "./edit-item-dialog"
+import { SortableList } from "@/components/ui/sortable-list"
 import { StockItem } from "@/lib/types"
 import { toast } from "sonner"
 
@@ -31,19 +32,22 @@ export function StockTable({ onViewHistory }: StockTableProps) {
   const categories = useStockStore((state) => state.categories)
   const selectedCategoryId = useStockStore((state) => state.selectedCategoryId)
   const removeItem = useStockStore((state) => state.removeItem)
+  const reorderItems = useStockStore((state) => state.reorderItems)
   const [editingItem, setEditingItem] = useState<{
     item: StockItem
     categoryId: string
     categoryName: string
   } | null>(null)
+  const activeCategory = useMemo(
+    () => categories.find((cat) => cat.id === selectedCategoryId) || categories[0],
+    [categories, selectedCategoryId]
+  )
   const materials = useMemo(
     () =>
-      categories
-        .filter((cat) => !selectedCategoryId || cat.id === selectedCategoryId)
-        .flatMap((cat) =>
-          cat.items.map((item) => ({ ...item, category: cat.name }))
-        ),
-    [categories, selectedCategoryId]
+      activeCategory
+        ? activeCategory.items.map((item) => ({ ...item, category: activeCategory.name }))
+        : [],
+    [activeCategory]
   )
   const [selectedMaterial, setSelectedMaterial] = useState<{
     item: StockItem
@@ -91,17 +95,31 @@ export function StockTable({ onViewHistory }: StockTableProps) {
   return (
     <div className="rounded-md border bg-card text-card-foreground shadow-sm">
       {/* Mobile: card list */}
-      <div className="divide-y md:hidden">
+      <div className="md:hidden">
         {materials.length === 0 ? (
           <div className="p-6 text-center text-sm text-muted-foreground">
             Nenhum material cadastrado.
           </div>
         ) : (
-          materials.map((item: StockItem & { category: string }) => {
-            const low = item.quantity <= item.minQuantity
-            return (
-              <div key={item.id} className="p-3">
+          <SortableList
+            className="divide-y"
+            items={materials}
+            onReorder={(ids) => activeCategory && reorderItems(activeCategory.id, ids)}
+            renderItem={(item, handle) => {
+              const low = item.quantity <= item.minQuantity
+              return (
+                <div className="p-3">
                 <div className="flex items-start justify-between gap-2">
+                  <button
+                    ref={handle.setActivatorNodeRef}
+                    {...handle.attributes}
+                    {...handle.listeners}
+                    type="button"
+                    aria-label="Mover item"
+                    className="mt-0.5 shrink-0 cursor-grab touch-none rounded p-1 text-muted-foreground/60 hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </button>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">{item.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{item.category}</p>
@@ -149,8 +167,9 @@ export function StockTable({ onViewHistory }: StockTableProps) {
                   </DropdownMenu>
                 </div>
               </div>
-            )
-          })
+              )
+            }}
+          />
         )}
       </div>
 
@@ -158,22 +177,40 @@ export function StockTable({ onViewHistory }: StockTableProps) {
       <Table className="hidden md:table">
         <TableHeader>
           <TableRow className="bg-muted/50">
+            <TableHead className="w-8 px-2"></TableHead>
             <TableHead className="text-xs font-semibold text-muted-foreground">Material</TableHead>
             <TableHead className="text-xs font-semibold text-muted-foreground">Categoria</TableHead>
             <TableHead className="text-right text-xs font-semibold text-muted-foreground">Estoque</TableHead>
             <TableHead className="text-right text-xs font-semibold text-muted-foreground">Ações</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
-          {materials.length === 0 ? (
+        {materials.length === 0 ? (
+          <TableBody>
             <TableRow>
-              <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+              <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                 Nenhum material cadastrado.
               </TableCell>
             </TableRow>
-          ) : (
-            materials.map((item: StockItem & { category: string }, idx: number) => (
-              <TableRow key={item.id} className={idx % 2 === 1 ? "bg-muted/40" : ""}>
+          </TableBody>
+        ) : (
+          <SortableList
+            asTbody
+            items={materials}
+            onReorder={(ids) => activeCategory && reorderItems(activeCategory.id, ids)}
+            renderItem={(item, handle) => (
+              <TableRow>
+                <TableCell className="w-8 px-2">
+                  <button
+                    ref={handle.setActivatorNodeRef}
+                    {...handle.attributes}
+                    {...handle.listeners}
+                    type="button"
+                    aria-label="Mover item"
+                    className="cursor-grab touch-none rounded p-1 text-muted-foreground/60 hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </button>
+                </TableCell>
                 <TableCell className="font-medium text-foreground">{item.name}</TableCell>
                 <TableCell className="text-muted-foreground">{item.category}</TableCell>
                 <TableCell className="text-right tabular-nums">
@@ -222,9 +259,9 @@ export function StockTable({ onViewHistory }: StockTableProps) {
                   </div>
                 </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
+            )}
+          />
+        )}
       </Table>
 
       {selectedMaterial && (
