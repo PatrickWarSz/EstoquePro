@@ -18,7 +18,7 @@ const generateId = () => Math.random().toString(36).substring(2, 15) + Date.now(
 
 function calcDeadlineStatus(exp: string | undefined, del: string | undefined): import('./types').OrderDeadlineStatus {
   const now = new Date()
-  if (del && exp) return new Date(del) <= new Date(exp) ? 'Entregue no Prazo' : 'Entregue no Prazo'
+  if (del && exp) return new Date(del) <= new Date(exp) ? 'Entregue no Prazo' : 'Entregue com Atraso'
   if (!exp) return 'Dentro do Prazo'
   return now > new Date(exp) ? 'Pedido Atrasado' : 'Dentro do Prazo'
 }
