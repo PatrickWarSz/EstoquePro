@@ -289,14 +289,31 @@ pricePerUnit: Number(p.preco_por_unidade) || 0,
       addSupplier: async (s) => {
         const { supabase } = await import('./supabase');
         const wId = useAuthStore.getState().workspaceId;
-        await supabase.from('fornecedores').insert([{ workspace_id: wId, nome: s.name, contato: s.contact, telefone: s.phone, email: s.email, cnpj: s.cnpj || '', observacao: s.notes || '' }]);
+        const { error } = await supabase.from('fornecedores').insert([{
+          workspace_id: wId,
+          nome: s.name,
+          contato: s.contact || null,
+          telefone: s.phone || null,
+          email: s.email || null,
+          cnpj: s.cnpj ? s.cnpj : null,
+          observacao: s.notes || null,
+        }]);
+        if (error) throw error;
         await get().initialize();
       },
 
       updateSupplier: async (id, up) => {
         const { supabase } = await import('./supabase');
-        const dbUp: any = { nome: up.name, contato: up.contact, telefone: up.phone, email: up.email, cnpj: up.cnpj, observacao: up.notes };
-        await supabase.from('fornecedores').update(dbUp).eq('id', id).eq('workspace_id', useAuthStore.getState().workspaceId);
+        const dbUp: any = {
+          nome: up.name,
+          contato: up.contact || null,
+          telefone: up.phone || null,
+          email: up.email || null,
+          cnpj: up.cnpj ? up.cnpj : null,
+          observacao: up.notes || null,
+        };
+        const { error } = await supabase.from('fornecedores').update(dbUp).eq('id', id).eq('workspace_id', useAuthStore.getState().workspaceId);
+        if (error) throw error;
         await get().initialize();
       },
 
