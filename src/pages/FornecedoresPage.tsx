@@ -31,9 +31,21 @@ export default function FornecedoresPage() {
 
   const save = async () => {
     if (!form.name.trim()) { toast.error("Nome é obrigatório"); return; }
-    if (editing) { await updateSupplier(editing.id, form); toast.success("Fornecedor atualizado"); }
-    else { await addSupplier(form); toast.success("Fornecedor adicionado"); }
-    setOpen(false);
+    try {
+      if (editing) { await updateSupplier(editing.id, form); toast.success("Fornecedor atualizado"); }
+      else { await addSupplier(form); toast.success("Fornecedor adicionado"); }
+      setOpen(false);
+    } catch (e: any) {
+      const msg = e?.message || "";
+      if (e?.code === "23505" || /duplicate|unique/i.test(msg)) {
+        if (/cnpj/i.test(msg)) toast.error("Já existe um fornecedor com esse CNPJ");
+        else if (/email/i.test(msg)) toast.error("Já existe um fornecedor com esse e-mail");
+        else if (/nome/i.test(msg)) toast.error("Já existe um fornecedor com esse nome");
+        else toast.error("Já existe um fornecedor com esses dados");
+      } else {
+        toast.error(msg || "Erro ao salvar fornecedor");
+      }
+    }
   };
 
   return (
