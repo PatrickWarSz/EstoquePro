@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, History, Settings, LayoutList, Table2 } from "lucide-react";
+import { Plus, Settings, LayoutList, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatsCards } from "@/components/stock/stats-cards";
 import { CategoryTabs } from "@/components/stock/category-tabs";
@@ -8,7 +8,6 @@ import { StockTable } from "@/components/stock/stock-table";
 import { AddItemDialog } from "@/components/stock/add-item-dialog";
 import { HistoryDialog } from "@/components/stock/history-dialog";
 import { CategoryEditor } from "@/components/stock/category-editor";
-import { GlobalHistoryDialog } from "@/components/stock/global-history-dialog";
 import { AllCategoriesView } from "@/components/stock/all-categories-view";
 import { StockItem } from "@/lib/types";
 import { useStockStore } from "@/lib/stock-store";
@@ -20,7 +19,6 @@ export default function EstoquePage() {
   const [params] = useSearchParams();
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [categoryEditorOpen, setCategoryEditorOpen] = useState(false);
-  const [globalHistoryOpen, setGlobalHistoryOpen] = useState(false);
   const [historyItem, setHistoryItem] = useState<StockItem | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("overview");
@@ -46,9 +44,6 @@ export default function EstoquePage() {
           <p className="text-xs sm:text-sm text-muted-foreground">Gerencie seu estoque de matéria prima</p>
         </div>
         <div className="-mx-1 flex flex-nowrap gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible">
-          <Button variant="outline" size="sm" onClick={() => setGlobalHistoryOpen(true)} className="shrink-0 gap-2">
-            <History className="h-4 w-4" /><span>Histórico</span>
-          </Button>
           <Button variant="outline" size="sm" onClick={() => setCategoryEditorOpen(true)} className="shrink-0 gap-2">
             <Settings className="h-4 w-4" /><span>Categorias</span>
           </Button>
@@ -85,7 +80,6 @@ export default function EstoquePage() {
       <AddItemDialog open={addItemOpen} onOpenChange={setAddItemOpen} />
       <HistoryDialog item={historyItem} open={historyItem !== null} onOpenChange={(open) => !open && setHistoryItem(null)} />
       <CategoryEditor open={categoryEditorOpen} onOpenChange={setCategoryEditorOpen} />
-      <GlobalHistoryDialog open={globalHistoryOpen} onOpenChange={setGlobalHistoryOpen} />
     </div>
   );
 }
