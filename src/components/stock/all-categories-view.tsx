@@ -6,6 +6,7 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   Package,
+  GripVertical,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -15,6 +16,7 @@ import { useStockStore } from "@/lib/stock-store"
 import { StockItem } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { MovementDialog } from "./movement-dialog"
+import { SortableList } from "@/components/ui/sortable-list"
 
 type StatusFilter = "all" | "garantido" | "baixo" | "zerado"
 
@@ -24,7 +26,7 @@ interface AllCategoriesViewProps {
 }
 
 export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCategoriesViewProps) {
-  const { categories } = useStockStore()
+  const { categories, reorderItems } = useStockStore()
   const [search, setSearch] = useState("")
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   
@@ -192,18 +194,33 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-border">
-                          {cat.items.map((item) => {
+                        <SortableList
+                          asTbody
+                          className="divide-y divide-border"
+                          items={cat.items}
+                          onReorder={(ids) => reorderItems(cat.id, ids)}
+                          renderItem={(item, handle) => {
                             const status = getStatus(item)
                             return (
                               <tr
-                                key={item.id}
                                 className={cn(
                                   "transition-colors hover:bg-muted/30",
                                   status === "zerado" && "bg-destructive/[0.03]",
                                   status === "baixo" && "bg-warning/[0.03]",
                                 )}
                               >
+                                <td className="px-2 py-2.5 w-8">
+                                  <button
+                                    ref={handle.setActivatorNodeRef}
+                                    {...handle.attributes}
+                                    {...handle.listeners}
+                                    type="button"
+                                    aria-label="Mover item"
+                                    className="cursor-grab touch-none rounded p-1 text-muted-foreground/60 hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                                  >
+                                    <GripVertical className="h-3.5 w-3.5" />
+                                  </button>
+                                </td>
                                 <td className="px-4 py-2.5 font-medium max-w-[200px] lg:max-w-xs truncate">
                                   {item.name}
                                 </td>
@@ -248,8 +265,8 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                                 </td>
                               </tr>
                             )
-                          })}
-                        </tbody>
+                          }}
+                        />
                       </table>
                     </div>
                   </div>
