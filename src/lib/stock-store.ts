@@ -55,6 +55,8 @@ export interface StockState {
   addCategory: (cat: any) => Promise<void>;
   updateCategory: (id: string, name: string) => Promise<void>;
   removeCategory: (id: string) => Promise<void>;
+  reorderCategories: (orderedIds: string[]) => Promise<void>;
+  reorderItems: (categoryId: string, orderedIds: string[]) => Promise<void>;
   clearHistory: () => Promise<void>;
   addSupplier: (s: any) => Promise<void>;
   updateSupplier: (id: string, up: any) => Promise<void>;
@@ -155,21 +157,35 @@ pricePerUnit: Number(p.preco_por_unidade) || 0,
 
           let categories: Category[] = [];
           if (catRes.data) {
-             categories = catRes.data.map(cat => ({
+             const sortedCats = [...catRes.data].sort((a: any, b: any) => {
+               const pa = a.posicao ?? 999999, pb = b.posicao ?? 999999;
+               if (pa !== pb) return pa - pb;
+               return (a.criado_em || '').localeCompare(b.criado_em || '');
+             });
+             const sortedProds = [...(prodRes.data || [])].sort((a: any, b: any) => {
+               const pa = a.posicao ?? 999999, pb = b.posicao ?? 999999;
+               if (pa !== pb) return pa - pb;
+               return (a.criado_em || '').localeCompare(b.criado_em || '');
+             });
+             categories = sortedCats.map(cat => ({
                 id: cat.id, name: cat.nome,
-                items: (prodRes.data || []).filter(pr => pr.categoria_id === cat.id).map(pr => ({
+                items: sortedProds.filter(pr => pr.categoria_id === cat.id).map(pr => ({
                   id: pr.id, name: pr.nome, quantity: Number(pr.quantidade), minQuantity: Number(pr.estoque_minimo), unit: pr.unidade, categoryId: pr.categoria_id, supplierIds: pr.fornecedor_ids || [],
                   history: (movRes.data || []).filter(m => m.produto_id === pr.id).map(m => ({ id: m.id, type: m.tipo as any, quantity: Number(m.quantidade), newTotal: Number(m.novo_total), date: m.data, note: m.observacao || '', orderId: m.pedido_id, operatorId: m.operador_id, operatorName: m.nome_operador || 'Sistema' }))
                 }))
              }));
           }
+          // Preserve the user's currently selected category across periodic refreshes.
+          const prevSelected = get().selectedCategoryId;
+          const stillExists = prevSelected && categories.some(c => c.id === prevSelected);
+          const nextSelected = stillExists ? prevSelected : (categories.length > 0 ? categories[0].id : null);
           set({ 
             categories, 
             suppliers, 
             locations, 
             orders, 
             qrAliases, 
-            selectedCategoryId: categories.length > 0 ? categories[0].id : null, 
+            selectedCategoryId: nextSelected, 
             loading: false,
             suppliersCursor: supRes.data && supRes.data.length > 0 ? supRes.data[supRes.data.length - 1].criado_em : null,
             suppliersHasMore: (supRes.data || []).length === 30,
