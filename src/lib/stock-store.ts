@@ -45,6 +45,9 @@ export interface StockState {
   suppliersHasMore: boolean;
   ordersCursor: string | null;
   ordersHasMore: boolean;
+  movimentacoesCursor: string | null;
+  movimentacoesHasMore: boolean;
+  fetchMoreHistory: (itemId?: string) => Promise<void>;
   
   initialize: () => Promise<void>;
   setSelectedCategory: (id: string) => void;
@@ -95,10 +98,12 @@ export const useStockStore = create<StockState>()(
       qrAliases: {},
       
       // Pagination state
-      suppliersCursor: null,
+       suppliersCursor: null,
       suppliersHasMore: true,
       ordersCursor: null,
       ordersHasMore: true,
+      movimentacoesCursor: null,
+      movimentacoesHasMore: false,
 
       initialize: async () => {
         set({ loading: true });
@@ -113,7 +118,7 @@ export const useStockStore = create<StockState>()(
           const [catRes, prodRes, movRes, supRes, locRes, pedRes, entRes, qrRes] = await Promise.all([
             supabase.from('categorias').select('*').eq('workspace_id', workspaceId),
             supabase.from('produtos').select('*').eq('workspace_id', workspaceId),
-            supabase.from('movimentacoes').select('*').eq('workspace_id', workspaceId).order('data', { ascending: false }),
+            supabase.from('movimentacoes').select('*').eq('workspace_id', workspaceId).order('data', { ascending: false }).limit(500),
             supabase.from('fornecedores').select('*').eq('workspace_id', workspaceId).order('criado_em', { ascending: false }).limit(30),
             supabase.from('locais_estoque').select('*').eq('workspace_id', workspaceId),
             supabase.from('pedidos').select('*').eq('workspace_id', workspaceId).order('criado_em', { ascending: false }).limit(50),
@@ -190,7 +195,9 @@ categories = sortedCats.map(cat => ({
             suppliersCursor: supRes.data && supRes.data.length > 0 ? supRes.data[supRes.data.length - 1].criado_em : null,
             suppliersHasMore: (supRes.data || []).length === 30,
             ordersCursor: pedRes.data && pedRes.data.length > 0 ? pedRes.data[pedRes.data.length - 1].criado_em : null,
-            ordersHasMore: (pedRes.data || []).length === 50
+            ordersHasMore: (pedRes.data || []).length === 50,
+            movimentacoesCursor: movRes.data && movRes.data.length > 0 ? movRes.data[movRes.data.length - 1].data : null,
+            movimentacoesHasMore: (movRes.data || []).length === 500,
           });
 
           // Cache QR metadata for offline resolution
@@ -671,6 +678,78 @@ if (up.productDescription) dbUp.descricao = up.productDescription;
           ordersHasMore: (data || []).length === limit 
         });
       },
+
+fetchMoreHistory: async (itemId?: string) => {
+        const { supabase } = await import('./supabase');
+        const wId = useAuthStore.getState().workspaceId;
+        if (!wId) return;
+
+        const BATCH = 100;
+        let cursor: string | null = null;
+
+        if (itemId) {
+          // Cursor por item: data da movimentação mais antiga já carregada para este item
+          const item = get().categories.flatMap(c => c.items).find(i => i.id === itemId);
+          if (!item || item.history.length === 0) return;
+          cursor = [...item.history].sort(
+            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+          )[0].date;
+        } else {
+          // Cursor global
+          cursor = get().movimentacoesCursor;
+          if (!cursor) return;
+        }
+
+        let query = supabase
+          .from('movimentacoes')
+          .select('*')
+          .eq('workspace_id', wId)
+          .lt('data', cursor)
+          .order('data', { ascending: false })
+          .limit(BATCH);
+
+        if (itemId) query = query.eq('produto_id', itemId);
+
+        const { data, error } = await query;
+        if (error || !data || data.length === 0) {
+          if (!itemId) set({ movimentacoesHasMore: false });
+          return;
+        }
+
+        // Anexar ao history de cada item afetado no estado
+        set((state) => {
+          const cats = state.categories.map(cat => ({
+            ...cat,
+            items: cat.items.map(it => {
+              const newEntries = data
+                .filter(m => m.produto_id === it.id)
+                .map(m => ({
+                  id: m.id,
+                  type: m.tipo as any,
+                  quantity: Number(m.quantidade),
+                  newTotal: Number(m.novo_total),
+                  date: m.data,
+                  note: m.observacao || '',
+                  orderId: m.pedido_id,
+                  operatorId: m.operador_id,
+                  operatorName: m.nome_operador || 'Sistema',
+                }));
+              if (newEntries.length === 0) return it;
+              return { ...it, history: [...it.history, ...newEntries] };
+            }),
+          }));
+          return {
+            categories: cats,
+            movimentacoesCursor: !itemId && data.length > 0
+              ? data[data.length - 1].data
+              : state.movimentacoesCursor,
+            movimentacoesHasMore: !itemId
+              ? data.length === BATCH
+              : state.movimentacoesHasMore,
+          } as any;
+        });
+      },
+
   }),
     { 
       name: 'estoque-local-v3',

@@ -1,5 +1,5 @@
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { ArrowDown, ArrowUp, Calendar, Package, Search, Trash2 } from "lucide-react"
 import {
   Dialog,
@@ -50,7 +50,14 @@ interface HistoryEntryWithContext {
 }
 
 export function GlobalHistoryDialog({ open, onOpenChange }: GlobalHistoryDialogProps) {
-  const { categories, clearHistory } = useStockStore()
+    const { categories, clearHistory, fetchMoreHistory, movimentacoesHasMore } = useStockStore()
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  const handleLoadMore = useCallback(async () => {
+    setLoadingMore(true)
+    await fetchMoreHistory()
+    setLoadingMore(false)
+  }, [fetchMoreHistory])
   const [search, setSearch] = useState("")
   const [typeFilter, setTypeFilter] = useState<"all" | "entrada" | "saida">("all")
   const [dateFrom, setDateFrom] = useState("")
@@ -279,20 +286,32 @@ export function GlobalHistoryDialog({ open, onOpenChange }: GlobalHistoryDialogP
                 {filteredHistory.length} movimentaç
                 {filteredHistory.length !== 1 ? "ões" : "ão"} encontrada
                 {filteredHistory.length !== 1 ? "s" : ""}
+                {movimentacoesHasMore && " (parcial)"}
               </span>
-              {hasFilters && (
-                <button
-                  className="hover:text-foreground transition-colors"
-                  onClick={() => {
-                    setSearch("")
-                    setTypeFilter("all")
-                    setDateFrom("")
-                    setDateTo("")
-                  }}
-                >
-                  Limpar filtros
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {movimentacoesHasMore && (
+                  <button
+                    className="hover:text-foreground transition-colors disabled:opacity-50"
+                    disabled={loadingMore}
+                    onClick={handleLoadMore}
+                  >
+                    {loadingMore ? "Carregando..." : "Carregar mais"}
+                  </button>
+                )}
+                {hasFilters && (
+                  <button
+                    className="hover:text-foreground transition-colors"
+                    onClick={() => {
+                      setSearch("")
+                      setTypeFilter("all")
+                      setDateFrom("")
+                      setDateTo("")
+                    }}
+                  >
+                    Limpar filtros
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </DialogContent>

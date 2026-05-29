@@ -1,4 +1,5 @@
 
+import { useState } from "react"
 import { History, ArrowUpCircle, ArrowDownCircle } from "lucide-react"
 import {
   Dialog,
@@ -10,6 +11,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { StockItem } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { useStockStore } from "@/lib/stock-store"
 
 interface HistoryDialogProps {
   item: StockItem | null
@@ -19,6 +21,19 @@ interface HistoryDialogProps {
 
 export function HistoryDialog({ item, open, onOpenChange }: HistoryDialogProps) {
   if (!item) return null
+
+  const { fetchMoreHistory } = useStockStore()
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [noMore, setNoMore] = useState(false)
+
+  const handleLoadMore = async () => {
+    const prevLen = item.history.length
+    setLoadingMore(true)
+    await fetchMoreHistory(item.id)
+    setLoadingMore(false)
+    // Se não veio nada novo, não tem mais
+    if (item.history.length === prevLen) setNoMore(true)
+  }
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -114,6 +129,17 @@ export function HistoryDialog({ item, open, onOpenChange }: HistoryDialogProps) 
                 ))}
             </div>
           </ScrollArea>
+        )}
+        {item.history.length > 0 && !noMore && (
+          <div className="pt-1 text-center">
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              disabled={loadingMore}
+              onClick={handleLoadMore}
+            >
+              {loadingMore ? "Carregando..." : "Carregar movimentações anteriores"}
+            </button>
+          </div>
         )}
       </DialogContent>
     </Dialog>
