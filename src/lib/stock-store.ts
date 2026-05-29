@@ -281,7 +281,12 @@ pricePerUnit: Number(p.preco_por_unidade) || 0,
 
       addCategory: async (cat) => {
         const { supabase } = await import('./supabase');
-        await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: useAuthStore.getState().workspaceId }]);
+        const wId = useAuthStore.getState().workspaceId;
+        const maxPos = get().categories.reduce((m: number, c: any) => {
+          const p = (c as any).posicao ?? 0;
+          return Math.max(m, typeof p === 'number' ? p : 0);
+        }, 0);
+        await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, posicao: maxPos + 1 }]);
         await get().initialize();
       },
 
@@ -298,6 +303,41 @@ pricePerUnit: Number(p.preco_por_unidade) || 0,
         await supabase.from('produtos').delete().eq('categoria_id', id).eq('workspace_id', wId);
         await supabase.from('categorias').delete().eq('id', id).eq('workspace_id', wId);
         await get().initialize();
+      },
+
+      reorderCategories: async (orderedIds) => {
+        const { supabase } = await import('./supabase');
+        const wId = useAuthStore.getState().workspaceId;
+        // Optimistic local update
+        set((state) => {
+          const map = new Map(state.categories.map(c => [c.id, c]));
+          const next = orderedIds.map(id => map.get(id)).filter(Boolean) as typeof state.categories;
+          // Append any that weren't in orderedIds (safety)
+          state.categories.forEach(c => { if (!orderedIds.includes(c.id)) next.push(c); });
+          return { categories: next } as any;
+        });
+        // Persist (one update per row — small N)
+        await Promise.all(orderedIds.map((id, idx) =>
+          supabase.from('categorias').update({ posicao: idx + 1 }).eq('id', id).eq('workspace_id', wId)
+        ));
+      },
+
+      reorderItems: async (categoryId, orderedIds) => {
+        const { supabase } = await import('./supabase');
+        const wId = useAuthStore.getState().workspaceId;
+        set((state) => {
+          const cats = state.categories.map(c => {
+            if (c.id !== categoryId) return c;
+            const map = new Map(c.items.map(i => [i.id, i]));
+            const next = orderedIds.map(id => map.get(id)).filter(Boolean) as typeof c.items;
+            c.items.forEach(i => { if (!orderedIds.includes(i.id)) next.push(i); });
+            return { ...c, items: next };
+          });
+          return { categories: cats } as any;
+        });
+        await Promise.all(orderedIds.map((id, idx) =>
+          supabase.from('produtos').update({ posicao: idx + 1 }).eq('id', id).eq('workspace_id', wId)
+        ));
       },
 
       clearHistory: async () => { /* Bloqueado por auditoria VEXO */ },
