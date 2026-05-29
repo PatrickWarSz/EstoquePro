@@ -227,7 +227,9 @@ pricePerUnit: Number(p.preco_por_unidade) || 0,
       addItem: async (catId, item) => {
         const { supabase } = await import('./supabase');
         const wId = useAuthStore.getState().workspaceId;
-        await supabase.from('produtos').insert([{ nome: item.name, quantidade: item.quantity, estoque_minimo: item.minQuantity || 0, unidade: item.unit || 'un', categoria_id: catId, workspace_id: wId }]);
+        const cat = get().categories.find(c => c.id === catId);
+        const maxPos = (cat?.items || []).reduce((m: number, it: any) => Math.max(m, (it as any).posicao ?? 0), 0);
+        await supabase.from('produtos').insert([{ nome: item.name, quantidade: item.quantity, estoque_minimo: item.minQuantity || 0, unidade: item.unit || 'un', categoria_id: catId, workspace_id: wId, posicao: (cat?.items.length || 0) + 1 }]);
         await get().initialize();
       },
 
