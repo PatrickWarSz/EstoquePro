@@ -15,8 +15,9 @@ export interface StockItem {
   quantity: number
   minQuantity: number
   unit: string
-  supplierIds?: string[] // linked suppliers
+  supplierIds?: string[]
   history: HistoryEntry[]
+  posicao?: number
 }
 
 export interface Category {
@@ -24,6 +25,7 @@ export interface Category {
   name: string
   unit?: string
   items: StockItem[]
+  posicao?: number
 }
 
 export type StockStatus = "garantido" | "baixo" | "zerado"

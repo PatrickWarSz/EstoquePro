@@ -167,13 +167,13 @@ pricePerUnit: Number(p.preco_por_unidade) || 0,
                if (pa !== pb) return pa - pb;
                return (a.criado_em || '').localeCompare(b.criado_em || '');
              });
-             categories = sortedCats.map(cat => ({
-                id: cat.id, name: cat.nome,
-                items: sortedProds.filter(pr => pr.categoria_id === cat.id).map(pr => ({
-                  id: pr.id, name: pr.nome, quantity: Number(pr.quantidade), minQuantity: Number(pr.estoque_minimo), unit: pr.unidade, categoryId: pr.categoria_id, supplierIds: pr.fornecedor_ids || [],
-                  history: (movRes.data || []).filter(m => m.produto_id === pr.id).map(m => ({ id: m.id, type: m.tipo as any, quantity: Number(m.quantidade), newTotal: Number(m.novo_total), date: m.data, note: m.observacao || '', orderId: m.pedido_id, operatorId: m.operador_id, operatorName: m.nome_operador || 'Sistema' }))
-                }))
-             }));
+categories = sortedCats.map(cat => ({
+   id: cat.id, name: cat.nome, posicao: cat.posicao ?? 0,
+   items: sortedProds.filter(pr => pr.categoria_id === cat.id).map(pr => ({
+     id: pr.id, name: pr.nome, quantity: Number(pr.quantidade), minQuantity: Number(pr.estoque_minimo), unit: pr.unidade, categoryId: pr.categoria_id, supplierIds: pr.fornecedor_ids || [], posicao: pr.posicao ?? 0,
+     history: (movRes.data || []).filter(m => m.produto_id === pr.id).map(m => ({ id: m.id, type: m.tipo as any, quantity: Number(m.quantidade), newTotal: Number(m.novo_total), date: m.data, note: m.observacao || '', orderId: m.pedido_id, operatorId: m.operador_id, operatorName: m.nome_operador || 'Sistema' }))
+   }))
+}));
           }
           // Preserve the user's currently selected category across periodic refreshes.
           const prevSelected = get().selectedCategoryId;
@@ -228,8 +228,8 @@ pricePerUnit: Number(p.preco_por_unidade) || 0,
         const { supabase } = await import('./supabase');
         const wId = useAuthStore.getState().workspaceId;
         const cat = get().categories.find(c => c.id === catId);
-        const maxPos = (cat?.items || []).reduce((m: number, it: any) => Math.max(m, (it as any).posicao ?? 0), 0);
-        await supabase.from('produtos').insert([{ nome: item.name, quantidade: item.quantity, estoque_minimo: item.minQuantity || 0, unidade: item.unit || 'un', categoria_id: catId, workspace_id: wId, posicao: (cat?.items.length || 0) + 1 }]);
+const maxPos = (cat?.items || []).reduce((m, it) => Math.max(m, it.posicao ?? 0), 0);
+await supabase.from('produtos').insert([{ nome: item.name, quantidade: item.quantity, estoque_minimo: item.minQuantity || 0, unidade: item.unit || 'un', categoria_id: catId, workspace_id: wId, posicao: maxPos + 1 }]);
         await get().initialize();
       },
 
@@ -284,11 +284,9 @@ pricePerUnit: Number(p.preco_por_unidade) || 0,
       addCategory: async (cat) => {
         const { supabase } = await import('./supabase');
         const wId = useAuthStore.getState().workspaceId;
-        const maxPos = get().categories.reduce((m: number, c: any) => {
-          const p = (c as any).posicao ?? 0;
-          return Math.max(m, typeof p === 'number' ? p : 0);
-        }, 0);
-        await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, posicao: maxPos + 1 }]);
+        // DEPOIS
+const maxPos = get().categories.reduce((m, c) => Math.max(m, c.posicao ?? 0), 0);
+await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, posicao: maxPos + 1 }]);
         await get().initialize();
       },
 
