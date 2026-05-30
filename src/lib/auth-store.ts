@@ -56,6 +56,7 @@ interface AuthState {
   resetPassword: (email: string) => Promise<{ ok: boolean; error?: string }>
   refreshSubscription: () => Promise<void>
   backupWorkspace: () => Promise<{ ok: boolean; id?: string; error?: string }>
+  restoreBackup: (backupId: string) => Promise<{ ok: boolean; error?: string }>
   addEmployee: (input: { username: string; password: string; name: string; permissions: any; isAdmin?: boolean }) => Promise<{ ok: boolean; id?: string; login?: string; error?: string }>
   updateEmployee: (id: string, updates: Partial<Employee>) => void
   removeEmployee: (id: string) => Promise<void>
@@ -238,40 +239,99 @@ export const useAuthStore = create<AuthState>()(
         try {
           const { supabase } = await import('./supabase');
           const workspaceId = get().workspaceId;
-          if (!workspaceId) return { ok: false, error: 'No workspace' };
+          const workspace = get().workspace;
+          if (!workspaceId) return { ok: false, error: 'Sessão inválida.' };
 
-          const [usuariosRes, produtosRes, categoriasRes, movimentacoesRes, locaisRes, pedidosRes, fornecedoresRes] = await Promise.all([
+          const [usuariosRes, produtosRes, categoriasRes, movRes,
+                 locaisRes, pedidosRes, fornecedoresRes, entregasRes, aliasesRes] = await Promise.all([
             supabase.from('usuarios').select('*').eq('workspace_id', workspaceId),
             supabase.from('produtos').select('*').eq('workspace_id', workspaceId),
             supabase.from('categorias').select('*').eq('workspace_id', workspaceId),
-            supabase.from('movimentacoes').select('*').eq('workspace_id', workspaceId),
+            // Sem limit — backup manual precisa ser completo
+            supabase.from('movimentacoes').select('*').eq('workspace_id', workspaceId).order('data', { ascending: false }),
             supabase.from('locais_estoque').select('*').eq('workspace_id', workspaceId),
             supabase.from('pedidos').select('*').eq('workspace_id', workspaceId),
             supabase.from('fornecedores').select('*').eq('workspace_id', workspaceId),
+            supabase.from('entregas_pedido').select('*').eq('workspace_id', workspaceId),
+            supabase.from('aliases_qr').select('*').eq('workspace_id', workspaceId),
           ]);
 
+          const timestamp = new Date().toISOString();
           const backup = {
-            workspaceId,
-            timestamp: new Date().toISOString(),
-            usuarios: usuariosRes.data || [],
-            produtos: produtosRes.data || [],
-            categorias: categoriasRes.data || [],
-            movimentacoes: movimentacoesRes.data || [],
-            locais_estoque: locaisRes.data || [],
-            pedidos: pedidosRes.data || [],
-            fornecedores: fornecedoresRes.data || [],
+            _meta: {
+              version: '2.0',
+              app: 'EstoquePro',
+              workspace_id: workspaceId,
+              nome_empresa: workspace?.nomeEmpresa || workspaceId,
+              timestamp,
+              totais: {
+                produtos:      (produtosRes.data || []).length,
+                categorias:    (categoriasRes.data || []).length,
+                movimentacoes: (movRes.data || []).length,
+                pedidos:       (pedidosRes.data || []).length,
+                fornecedores:  (fornecedoresRes.data || []).length,
+                usuarios:      (usuariosRes.data || []).length,
+              }
+            },
+            usuarios:         usuariosRes.data || [],
+            produtos:         produtosRes.data || [],
+            categorias:       categoriasRes.data || [],
+            movimentacoes:    movRes.data || [],
+            locais_estoque:   locaisRes.data || [],
+            pedidos:          pedidosRes.data || [],
+            entregas_pedido:  entregasRes.data || [],
+            fornecedores:     fornecedoresRes.data || [],
+            aliases_qr:       aliasesRes.data || [],
           };
 
           const id = `backup-${Date.now()}`;
           const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
-          const path = `${workspaceId}/${id}.json`;
-          const { error: upErr } = await supabase.storage.from('backups').upload(path, blob);
+          const storagePath = `${workspaceId}/${id}.json`;
+
+          const { error: upErr } = await supabase.storage
+            .from('backups')
+            .upload(storagePath, blob, { contentType: 'application/json', upsert: false });
           if (upErr) return { ok: false, error: upErr.message };
-          await supabase.from('backups').insert([{ id, workspace_id: workspaceId, tamanho: blob.size, data_criacao: backup.timestamp }]);
+
+          // Tabela correta: backup_logs (não "backups")
+          const { error: logErr } = await supabase.from('backup_logs').insert([{
+            id,
+            workspace_id: workspaceId,
+            storage_path: storagePath,
+            tamanho_bytes: blob.size,
+            status: 'ok',
+            criado_em: timestamp,
+          }]);
+          if (logErr) console.warn('[backupWorkspace] log insert falhou:', logErr.message);
+
+          // Retenção: manter só os 7 mais recentes
+          await supabase.rpc('cleanup_old_backups', { p_workspace_id: workspaceId });
+
           return { ok: true, id };
         } catch (err: any) {
           console.error('[backupWorkspace]', err);
           return { ok: false, error: err?.message || String(err) };
+        }
+      },
+
+      restoreBackup: async (backupId) => {
+        try {
+          const { supabase } = await import('./supabase');
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          if (!token) return { ok: false, error: 'Sessão expirada.' };
+
+          const { data, error } = await supabase.functions.invoke('restore-backup', {
+            body: { backupId },
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (error || !data?.success) {
+            return { ok: false, error: data?.error || error?.message || 'Falha na restauração.' };
+          }
+          return { ok: true };
+        } catch (err: any) {
+          return { ok: false, error: err?.message || 'Erro inesperado.' };
         }
       },
 

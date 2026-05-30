@@ -7,8 +7,9 @@ import { useAuthStore } from "@/lib/auth-store";
 import { Moon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-// Importa a nova tela de vendas que o Lovable fez
+
 import { SubscriptionPanel, SubscriptionStatus } from "@/components/settings/SubscriptionPanel";
+import { BackupPanel } from "@/components/settings/BackupPanel";
 
 export default function ConfiguracoesPage() {
   const { theme, setTheme } = useTheme();
@@ -122,9 +123,12 @@ export default function ConfiguracoesPage() {
               <p className="text-xs text-muted-foreground">Alterna entre tema claro e escuro</p>
             </div>
           </div>
-          <Switch checked={theme === "dark"} onCheckedChange={(v) => setTheme(v ? "dark" : "light")} />
+        <Switch checked={theme === "dark"} onCheckedChange={(v) => setTheme(v ? "dark" : "light")} />
         </div>
       </Card>
+
+      {/* BACKUP DE DADOS */}
+      <BackupPanel />
 
     </div>
   );

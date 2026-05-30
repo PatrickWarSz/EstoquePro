@@ -1,0 +1,28 @@
+name: Daily Backup
+
+on:
+  schedule:
+    # Todo dia às 03:00 horário de Brasília (06:00 UTC)
+    - cron: '0 6 * * *'
+  # Permite disparar manualmente pelo painel do GitHub (Actions → Run workflow)
+  workflow_dispatch:
+
+jobs:
+  backup:
+    name: Run scheduled backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger scheduled-backup Edge Function
+        run: |
+          RESPONSE=$(curl --silent --show-error --fail \
+            --max-time 60 \
+            -X POST "${{ secrets.SUPABASE_EDGE_URL }}/scheduled-backup" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+
+          echo "Response: $RESPONSE"
+
+          # Falha o job se a resposta não contiver "ok":true
+          echo "$RESPONSE" | grep -q '"ok":true' || (echo "Backup reportou erro" && exit 1)
