@@ -38,7 +38,8 @@ export function TopBar() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (query.trim()) navigate(`/estoque?q=${encodeURIComponent(query.trim())}`);
+    const q = query.trim();
+    if (q) navigate(`/app/estoque?q=${encodeURIComponent(q)}`);
   };
 
   return (
@@ -50,7 +51,7 @@ export function TopBar() {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar item, fornecedor, pedido..."
+          placeholder="Buscar item no estoque..."
           className="h-9 pl-9 pr-16 bg-muted/40 border-border"
         />
         <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 hidden md:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
