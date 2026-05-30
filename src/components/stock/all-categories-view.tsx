@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   ChevronDown,
   ChevronRight,
@@ -16,7 +16,7 @@ import { StockItem } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { MovementDialog } from "./movement-dialog"
 import { SortableList } from "@/components/ui/sortable-list"
-import { formatQuantity, pluralizeUnit } from "@/lib/units"
+import { pluralizeUnit } from "@/lib/units"
 
 type StatusFilter = "all" | "garantido" | "baixo" | "zerado"
 
@@ -32,7 +32,7 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter, initial
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
   // sincroniza quando o usuário busca pelo TopBar
-  useMemo(() => { if (initialSearch !== undefined) setSearch(initialSearch) }, [initialSearch])
+  useEffect(() => { setSearch(initialSearch) }, [initialSearch])
   
   // Agora usamos o estado correto para abrir nosso novo MovementDialog!
   const [movementDialog, setMovementDialog] = useState<{
