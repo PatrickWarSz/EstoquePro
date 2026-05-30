@@ -22,6 +22,8 @@ import { EditItemDialog } from "./edit-item-dialog"
 import { SortableList } from "@/components/ui/sortable-list"
 import { StockItem } from "@/lib/types"
 import { toast } from "sonner"
+import { pluralizeUnit } from "@/lib/units"
+import { cn } from "@/lib/utils"
 
 interface StockTableProps {
   onViewHistory: (item: StockItem) => void;
@@ -106,9 +108,14 @@ export function StockTable({ onViewHistory }: StockTableProps) {
             items={materials}
             onReorder={(ids) => activeCategory && reorderItems(activeCategory.id, ids)}
             renderItem={(item, handle) => {
-              const low = item.quantity <= item.minQuantity
+              const zero = item.quantity === 0
+              const low = !zero && item.quantity <= item.minQuantity
               return (
-                <div className="p-3">
+                <div className={cn(
+                  "p-3",
+                  zero && "bg-destructive/5",
+                  low && "bg-warning/5",
+                )}>
                 <div className="flex items-start justify-between gap-2">
                   <button
                     ref={handle.setActivatorNodeRef}
@@ -124,8 +131,15 @@ export function StockTable({ onViewHistory }: StockTableProps) {
                     <p className="truncate text-sm font-semibold">{item.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{item.category}</p>
                   </div>
-                  <div className={`shrink-0 text-right text-sm tabular-nums ${low ? "text-destructive font-bold" : ""}`}>
-                    {item.quantity} <span className="text-xs text-muted-foreground">{item.unit}</span>
+                  <div className={cn(
+                    "shrink-0 text-right text-sm tabular-nums font-semibold whitespace-nowrap",
+                    zero && "text-destructive",
+                    low && "text-warning",
+                  )}>
+                    {item.quantity.toLocaleString("pt-BR")}{" "}
+                    <span className="text-xs text-muted-foreground font-normal">
+                      {pluralizeUnit(item.quantity, item.unit, { short: true })}
+                    </span>
                   </div>
                 </div>
                 <div className="mt-2 flex items-center gap-2">
@@ -214,9 +228,23 @@ export function StockTable({ onViewHistory }: StockTableProps) {
                 <TableCell className="font-medium text-foreground">{item.name}</TableCell>
                 <TableCell className="text-muted-foreground">{item.category}</TableCell>
                 <TableCell className="text-right tabular-nums">
-                  <span className={item.quantity <= item.minQuantity ? "text-destructive font-bold" : "text-foreground"}>
-                    {item.quantity} {item.unit}
-                  </span>
+                  {(() => {
+                    const zero = item.quantity === 0
+                    const low = !zero && item.quantity <= item.minQuantity
+                    return (
+                      <span className={cn(
+                        "font-semibold",
+                        zero && "text-destructive",
+                        low && "text-warning",
+                        !zero && !low && "text-foreground",
+                      )}>
+                        {item.quantity.toLocaleString("pt-BR")}{" "}
+                        <span className="text-muted-foreground font-normal">
+                          {pluralizeUnit(item.quantity, item.unit)}
+                        </span>
+                      </span>
+                    )
+                  })()}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
