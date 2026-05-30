@@ -70,7 +70,7 @@ export function CategoryTabs({ onEditCategories }: CategoryTabsProps) {
                 <div className="flex items-center gap-2">
                   <span>{category.name}</span>
                   <span className="text-xs text-muted-foreground">
-                    ({category.items.length} itens)
+                    ({category.items.length} {category.items.length === 1 ? "item" : "itens"})
                   </span>
                   {catZeroCount > 0 && (
                     <XCircle className="h-3.5 w-3.5 text-destructive" />
@@ -88,7 +88,7 @@ export function CategoryTabs({ onEditCategories }: CategoryTabsProps) {
       {selectedCategory && (
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">
-            {selectedCategory.items.length} itens
+            {selectedCategory.items.length} {selectedCategory.items.length === 1 ? "item" : "itens"}
           </span>
           {zeroCount > 0 && (
             <span className="flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">
