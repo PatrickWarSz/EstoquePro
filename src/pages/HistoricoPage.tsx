@@ -1,10 +1,11 @@
-import { History as HistoryIcon, ArrowDown, ArrowUp, Search, Download, X } from "lucide-react";
+import { History as HistoryIcon, ArrowDown, ArrowUp, Search, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStockStore } from "@/lib/stock-store";
 import { useMemo, useState } from "react";
+import { pluralizeUnit } from "@/lib/units";
 
 interface Entry {
   itemName: string;
@@ -73,15 +74,6 @@ export default function HistoricoPage() {
     });
   }, [allEntries, search, typeFilter, operatorFilter, categoryFilter, dateFrom, dateTo]);
 
-  const summary = useMemo(() => {
-    let entradas = 0, saidas = 0, qtdEntrada = 0, qtdSaida = 0;
-    filtered.forEach((e) => {
-      if (e.type === "entrada") { entradas++; qtdEntrada += e.quantity; }
-      else { saidas++; qtdSaida += e.quantity; }
-    });
-    return { entradas, saidas, qtdEntrada, qtdSaida };
-  }, [filtered]);
-
   const hasFilters = !!(search || typeFilter !== "all" || operatorFilter !== "all" || categoryFilter !== "all" || dateFrom || dateTo);
 
   const clearFilters = () => {
@@ -89,42 +81,16 @@ export default function HistoricoPage() {
     setCategoryFilter("all"); setDateFrom(""); setDateTo("");
   };
 
-  const exportCSV = () => {
-    const headers = ["Data", "Item", "Categoria", "Operador", "Tipo", "Quantidade", "Unidade", "Saldo", "Observação"];
-    const rows = filtered.map((e) => [
-      new Date(e.date).toLocaleString("pt-BR"),
-      e.itemName,
-      e.categoryName,
-      e.operatorName || "",
-      e.type,
-      String(e.quantity),
-      e.unit || "",
-      String(e.newTotal),
-      (e.note || "").replace(/"/g, '""'),
-    ]);
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `historico-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
-    <div className="px-4 py-6 md:px-6 md:py-8">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8">
+      <div className="mb-4 sm:mb-6">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Histórico Geral</h2>
-          <p className="text-sm text-muted-foreground">
-            {filtered.length} de {allEntries.length} movimentações
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Histórico Geral</h2>
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            {filtered.length} de {allEntries.length} {allEntries.length === 1 ? "movimentação" : "movimentações"}
             {hasFilters && " (filtradas)"}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={exportCSV} disabled={filtered.length === 0} className="gap-2">
-          <Download className="h-4 w-4" /> Exportar CSV
-        </Button>
       </div>
 
       {/* Filtros */}
@@ -176,26 +142,12 @@ export default function HistoricoPage() {
             </div>
           </div>
           {hasFilters && (
-            <div className="flex items-end">
+            <div className="flex items-end sm:col-span-2 lg:col-span-1">
               <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1.5 w-full">
                 <X className="h-3.5 w-3.5" /> Limpar filtros
               </Button>
             </div>
           )}
-        </div>
-
-        {/* Resumo dos filtros */}
-        <div className="mt-3 flex flex-wrap gap-3 border-t pt-3 text-xs">
-          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-            <span className="inline-flex h-2 w-2 rounded-full bg-success" />
-            <strong className="text-foreground">{summary.entradas}</strong> entradas
-            <span className="font-mono">(+{summary.qtdEntrada.toLocaleString("pt-BR")})</span>
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-            <span className="inline-flex h-2 w-2 rounded-full bg-destructive" />
-            <strong className="text-foreground">{summary.saidas}</strong> saídas
-            <span className="font-mono">(-{summary.qtdSaida.toLocaleString("pt-BR")})</span>
-          </span>
         </div>
       </Card>
 
@@ -212,9 +164,42 @@ export default function HistoricoPage() {
           </p>
         </Card>
       ) : (
-        <Card className="overflow-hidden">
-          <div className="max-h-[70vh] overflow-y-auto">
-            <table className="w-full text-sm">
+        <>
+          {/* Mobile: cards */}
+          <div className="md:hidden space-y-2">
+            {filtered.map((e, i) => (
+              <Card key={i} className="p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${e.type === "entrada" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"}`}>
+                    {e.type === "entrada" ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />}
+                    {e.type}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                    {new Date(e.date).toLocaleString("pt-BR")}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-sm font-semibold truncate">{e.itemName}</p>
+                <p className="text-xs text-muted-foreground truncate">{e.categoryName}</p>
+                {e.note && <p className="mt-1 text-[11px] text-muted-foreground">{e.note}</p>}
+                <div className="mt-2 flex items-center justify-between text-xs border-t pt-2">
+                  <span className="text-muted-foreground">
+                    Por <strong className="text-foreground">{e.operatorName || "—"}</strong>
+                  </span>
+                  <span className="font-mono">
+                    <span className={e.type === "entrada" ? "text-success" : "text-destructive"}>
+                      {e.type === "entrada" ? "+" : "−"}{e.quantity} {pluralizeUnit(e.quantity, e.unit, { short: true })}
+                    </span>
+                    <span className="text-muted-foreground"> → {e.newTotal}</span>
+                  </span>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {/* Desktop: table */}
+          <Card className="hidden md:block overflow-hidden">
+            <div className="max-h-[70vh] overflow-y-auto">
+              <table className="w-full text-sm">
               <thead className="sticky top-0 bg-muted/50 backdrop-blur">
                 <tr className="text-left">
                   <th className="px-4 py-2.5 font-medium text-muted-foreground">Data</th>
@@ -242,14 +227,17 @@ export default function HistoricoPage() {
                         {e.type}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono">{e.quantity}</td>
+                    <td className="px-4 py-2.5 text-right font-mono whitespace-nowrap">
+                      {e.quantity} <span className="text-muted-foreground">{pluralizeUnit(e.quantity, e.unit)}</span>
+                    </td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold">{e.newTotal}</td>
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
-        </Card>
+              </table>
+            </div>
+          </Card>
+        </>
       )}
     </div>
   );
