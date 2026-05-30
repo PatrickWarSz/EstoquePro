@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   ChevronDown,
   ChevronRight,
@@ -16,18 +16,23 @@ import { StockItem } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { MovementDialog } from "./movement-dialog"
 import { SortableList } from "@/components/ui/sortable-list"
+import { pluralizeUnit } from "@/lib/units"
 
 type StatusFilter = "all" | "garantido" | "baixo" | "zerado"
 
 interface AllCategoriesViewProps {
   statusFilter?: StatusFilter
   onClearFilter?: () => void
+  initialSearch?: string
 }
 
-export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCategoriesViewProps) {
+export function AllCategoriesView({ statusFilter = "all", onClearFilter, initialSearch = "" }: AllCategoriesViewProps) {
   const { categories, reorderItems } = useStockStore()
-  const [search, setSearch] = useState("")
+  const [search, setSearch] = useState(initialSearch)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+
+  // sincroniza quando o usuário busca pelo TopBar
+  useEffect(() => { setSearch(initialSearch) }, [initialSearch])
   
   // Agora usamos o estado correto para abrir nosso novo MovementDialog!
   const [movementDialog, setMovementDialog] = useState<{
@@ -104,7 +109,7 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
               )}
             </span>
           )}
-          <span>{totalFiltered} iten{totalFiltered !== 1 ? "s" : ""}</span>
+          <span>{totalFiltered} {totalFiltered === 1 ? "item" : "itens"}</span>
         </div>
       </div>
 
@@ -152,7 +157,74 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                 {/* Items table */}
                 {!isCollapsed && (
                   <div className="border-t">
-                    <div className="overflow-x-auto">
+                    {/* Mobile: cards (sem scroll horizontal) */}
+                    <div className="md:hidden">
+                      <SortableList
+                        className="divide-y divide-border"
+                        items={cat.items}
+                        onReorder={(ids) => reorderItems(cat.id, ids)}
+                        renderItem={(item, handle) => {
+                          const status = getStatus(item)
+                          return (
+                            <div
+                              className={cn(
+                                "p-3",
+                                status === "zerado" && "bg-destructive/5",
+                                status === "baixo" && "bg-warning/5",
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <button
+                                  ref={handle.setActivatorNodeRef}
+                                  {...handle.attributes}
+                                  {...handle.listeners}
+                                  type="button"
+                                  aria-label="Mover item"
+                                  className="mt-0.5 shrink-0 cursor-grab touch-none rounded p-1 text-muted-foreground/60 hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                                >
+                                  <GripVertical className="h-4 w-4" />
+                                </button>
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-semibold">{item.name}</p>
+                                </div>
+                                <div className={cn(
+                                  "shrink-0 text-right text-sm tabular-nums font-semibold whitespace-nowrap",
+                                  status === "zerado" && "text-destructive",
+                                  status === "baixo" && "text-warning",
+                                )}>
+                                  {item.quantity.toLocaleString("pt-BR")}{" "}
+                                  <span className="text-xs text-muted-foreground font-normal">
+                                    {pluralizeUnit(item.quantity, item.unit, { short: true })}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="mt-2 flex items-center gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-9 flex-1 text-success border-success/30 hover:bg-success/10"
+                                  onClick={() => setMovementDialog({ item, categoryId: cat.id, type: "entrada" })}
+                                >
+                                  <ArrowUpCircle className="mr-1 h-4 w-4" />
+                                  Entrada
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-9 flex-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+                                  onClick={() => setMovementDialog({ item, categoryId: cat.id, type: "saida" })}
+                                >
+                                  <ArrowDownCircle className="mr-1 h-4 w-4" />
+                                  Saída
+                                </Button>
+                              </div>
+                            </div>
+                          )
+                        }}
+                      />
+                    </div>
+                    {/* Desktop / tablet: table */}
+                    <div className="hidden md:block">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="bg-muted/30">
@@ -212,7 +284,9 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                                   )}>
                                     {item.quantity.toLocaleString("pt-BR")}
                                   </span>
-                                  <span className="text-muted-foreground ml-1">{item.unit}</span>
+                                  <span className="text-muted-foreground ml-1">
+                                    {pluralizeUnit(item.quantity, item.unit)}
+                                  </span>
                                 </td>
                                 <td className="px-3 sm:px-4 py-2.5 text-right whitespace-nowrap">
                                   <div className="flex justify-end gap-2">
