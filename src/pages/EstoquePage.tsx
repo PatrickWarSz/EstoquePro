@@ -26,10 +26,14 @@ export default function EstoquePage() {
   const { categories } = useStockStore();
   const hasCategories = (categories || []).length > 0;
 
+  const searchQuery = params.get("q") || "";
+
   useEffect(() => {
-    const q = params.get("q");
-    if (q) setStatusFilter("all");
-  }, [params]);
+    if (searchQuery) {
+      setStatusFilter("all");
+      setViewMode("overview");
+    }
+  }, [searchQuery]);
 
   const handleFilterChange = (filter: StatusFilter) => {
     setStatusFilter(filter);
@@ -69,7 +73,11 @@ export default function EstoquePage() {
       </div>
 
       {viewMode === "overview" ? (
-        <AllCategoriesView statusFilter={statusFilter} onClearFilter={() => setStatusFilter("all")} />
+        <AllCategoriesView
+          statusFilter={statusFilter}
+          onClearFilter={() => setStatusFilter("all")}
+          initialSearch={searchQuery}
+        />
       ) : (
         <>
           <div className="mb-6"><CategoryTabs onEditCategories={() => setCategoryEditorOpen(true)} /></div>
