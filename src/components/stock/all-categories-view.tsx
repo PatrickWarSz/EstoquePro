@@ -10,7 +10,6 @@ import {
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { useStockStore } from "@/lib/stock-store"
 import { StockItem } from "@/lib/types"
@@ -67,29 +66,6 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
 
   const toggleCollapse = (catId: string) => {
     setCollapsed((prev) => ({ ...prev, [catId]: !prev[catId] }))
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "garantido":
-        return (
-          <Badge variant="outline" className="border-success/30 bg-success/10 text-success text-[10px] px-1.5 py-0">
-            OK
-          </Badge>
-        )
-      case "baixo":
-        return (
-          <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning text-[10px] px-1.5 py-0">
-            Baixo
-          </Badge>
-        )
-      case "zerado":
-        return (
-          <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-destructive text-[10px] px-1.5 py-0">
-            Zerado
-          </Badge>
-        )
-    }
   }
 
   if (categories.length === 0) {
@@ -182,13 +158,13 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                           <tr className="bg-muted/30">
                             <th className="w-8 px-2 py-2"></th>
                             <th className="px-4 py-2 text-left text-xs font-semibold text-muted-foreground">
-                              Item
+                              Material
+                            </th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-muted-foreground">
+                              Categoria
                             </th>
                             <th className="px-4 py-2 text-right text-xs font-semibold text-muted-foreground whitespace-nowrap">
-                              Qtd / Mín
-                            </th>
-                            <th className="px-4 py-2 text-right text-xs font-semibold text-muted-foreground">
-                              Status
+                              Estoque
                             </th>
                             <th className="px-4 py-2 text-right text-xs font-semibold text-muted-foreground">
                               Ações
@@ -206,8 +182,8 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                               <tr
                                 className={cn(
                                   "transition-colors hover:bg-muted/30",
-                                  status === "zerado" && "bg-destructive/[0.03]",
-                                  status === "baixo" && "bg-warning/[0.03]",
+                                  status === "zerado" && "bg-destructive/5 hover:bg-destructive/10",
+                                  status === "baixo" && "bg-warning/5 hover:bg-warning/10",
                                 )}
                               >
                                 <td className="px-2 py-2.5 w-8">
@@ -225,6 +201,9 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                                 <td className="px-4 py-2.5 font-medium max-w-[200px] lg:max-w-xs truncate">
                                   {item.name}
                                 </td>
+                                <td className="px-4 py-2.5 text-muted-foreground text-sm max-w-[220px] truncate">
+                                  {cat.name}
+                                </td>
                                 <td className="px-4 py-2.5 text-right whitespace-nowrap text-sm tabular-nums">
                                   <span className={cn(
                                     "font-semibold",
@@ -234,13 +213,6 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                                     {item.quantity.toLocaleString("pt-BR")}
                                   </span>
                                   <span className="text-muted-foreground ml-1">{item.unit}</span>
-                                  <span className="text-muted-foreground/50 mx-1">/</span>
-                                  <span className="text-muted-foreground">
-                                    {item.minQuantity.toLocaleString("pt-BR")}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-2.5 text-right">
-                                  {getStatusBadge(status)}
                                 </td>
                                 <td className="px-3 sm:px-4 py-2.5 text-right whitespace-nowrap">
                                   <div className="flex justify-end gap-2">
