@@ -347,6 +347,7 @@ export function OrdersPage() {
                         <strong>Preço/{orderUnit}:</strong>{" "}
                         {pricePerUnit.toLocaleString("pt-BR", {
                           minimumFractionDigits: 2,
+                          maximumFractionDigits: 4,
                         })}
                       </span>
                       <span>
