@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   ChevronDown,
   ChevronRight,
@@ -10,25 +10,29 @@ import {
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { useStockStore } from "@/lib/stock-store"
 import { StockItem } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { MovementDialog } from "./movement-dialog"
 import { SortableList } from "@/components/ui/sortable-list"
+import { pluralizeUnit } from "@/lib/units"
 
 type StatusFilter = "all" | "garantido" | "baixo" | "zerado"
 
 interface AllCategoriesViewProps {
   statusFilter?: StatusFilter
   onClearFilter?: () => void
+  initialSearch?: string
 }
 
-export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCategoriesViewProps) {
+export function AllCategoriesView({ statusFilter = "all", onClearFilter, initialSearch = "" }: AllCategoriesViewProps) {
   const { categories, reorderItems } = useStockStore()
-  const [search, setSearch] = useState("")
+  const [search, setSearch] = useState(initialSearch)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+
+  // sincroniza quando o usuário busca pelo TopBar
+  useEffect(() => { setSearch(initialSearch) }, [initialSearch])
   
   // Agora usamos o estado correto para abrir nosso novo MovementDialog!
   const [movementDialog, setMovementDialog] = useState<{
@@ -69,29 +73,6 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
     setCollapsed((prev) => ({ ...prev, [catId]: !prev[catId] }))
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "garantido":
-        return (
-          <Badge variant="outline" className="border-success/30 bg-success/10 text-success text-[10px] px-1.5 py-0">
-            OK
-          </Badge>
-        )
-      case "baixo":
-        return (
-          <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning text-[10px] px-1.5 py-0">
-            Baixo
-          </Badge>
-        )
-      case "zerado":
-        return (
-          <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-destructive text-[10px] px-1.5 py-0">
-            Zerado
-          </Badge>
-        )
-    }
-  }
-
   if (categories.length === 0) {
     return (
       <Card className="flex h-64 flex-col items-center justify-center gap-3">
@@ -128,7 +109,7 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
               )}
             </span>
           )}
-          <span>{totalFiltered} iten{totalFiltered !== 1 ? "s" : ""}</span>
+          <span>{totalFiltered} {totalFiltered === 1 ? "item" : "itens"}</span>
         </div>
       </div>
 
@@ -176,19 +157,86 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                 {/* Items table */}
                 {!isCollapsed && (
                   <div className="border-t">
-                    <div className="overflow-x-auto">
+                    {/* Mobile: cards (sem scroll horizontal) */}
+                    <div className="md:hidden">
+                      <SortableList
+                        className="divide-y divide-border"
+                        items={cat.items}
+                        onReorder={(ids) => reorderItems(cat.id, ids)}
+                        renderItem={(item, handle) => {
+                          const status = getStatus(item)
+                          return (
+                            <div
+                              className={cn(
+                                "p-3",
+                                status === "zerado" && "bg-destructive/5",
+                                status === "baixo" && "bg-warning/5",
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <button
+                                  ref={handle.setActivatorNodeRef}
+                                  {...handle.attributes}
+                                  {...handle.listeners}
+                                  type="button"
+                                  aria-label="Mover item"
+                                  className="mt-0.5 shrink-0 cursor-grab touch-none rounded p-1 text-muted-foreground/60 hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                                >
+                                  <GripVertical className="h-4 w-4" />
+                                </button>
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-semibold">{item.name}</p>
+                                </div>
+                                <div className={cn(
+                                  "shrink-0 text-right text-sm tabular-nums font-semibold whitespace-nowrap",
+                                  status === "zerado" && "text-destructive",
+                                  status === "baixo" && "text-warning",
+                                )}>
+                                  {item.quantity.toLocaleString("pt-BR")}{" "}
+                                  <span className="text-xs text-muted-foreground font-normal">
+                                    {pluralizeUnit(item.quantity, item.unit, { short: true })}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="mt-2 flex items-center gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-9 flex-1 text-success border-success/30 hover:bg-success/10"
+                                  onClick={() => setMovementDialog({ item, categoryId: cat.id, type: "entrada" })}
+                                >
+                                  <ArrowUpCircle className="mr-1 h-4 w-4" />
+                                  Entrada
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-9 flex-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+                                  onClick={() => setMovementDialog({ item, categoryId: cat.id, type: "saida" })}
+                                >
+                                  <ArrowDownCircle className="mr-1 h-4 w-4" />
+                                  Saída
+                                </Button>
+                              </div>
+                            </div>
+                          )
+                        }}
+                      />
+                    </div>
+                    {/* Desktop / tablet: table */}
+                    <div className="hidden md:block">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="bg-muted/30">
                             <th className="w-8 px-2 py-2"></th>
                             <th className="px-4 py-2 text-left text-xs font-semibold text-muted-foreground">
-                              Item
+                              Material
+                            </th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-muted-foreground">
+                              Categoria
                             </th>
                             <th className="px-4 py-2 text-right text-xs font-semibold text-muted-foreground whitespace-nowrap">
-                              Qtd / Mín
-                            </th>
-                            <th className="px-4 py-2 text-right text-xs font-semibold text-muted-foreground">
-                              Status
+                              Estoque
                             </th>
                             <th className="px-4 py-2 text-right text-xs font-semibold text-muted-foreground">
                               Ações
@@ -206,8 +254,8 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                               <tr
                                 className={cn(
                                   "transition-colors hover:bg-muted/30",
-                                  status === "zerado" && "bg-destructive/[0.03]",
-                                  status === "baixo" && "bg-warning/[0.03]",
+                                  status === "zerado" && "bg-destructive/5 hover:bg-destructive/10",
+                                  status === "baixo" && "bg-warning/5 hover:bg-warning/10",
                                 )}
                               >
                                 <td className="px-2 py-2.5 w-8">
@@ -225,6 +273,9 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                                 <td className="px-4 py-2.5 font-medium max-w-[200px] lg:max-w-xs truncate">
                                   {item.name}
                                 </td>
+                                <td className="px-4 py-2.5 text-muted-foreground text-sm max-w-[220px] truncate">
+                                  {cat.name}
+                                </td>
                                 <td className="px-4 py-2.5 text-right whitespace-nowrap text-sm tabular-nums">
                                   <span className={cn(
                                     "font-semibold",
@@ -233,14 +284,9 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter }: AllCa
                                   )}>
                                     {item.quantity.toLocaleString("pt-BR")}
                                   </span>
-                                  <span className="text-muted-foreground ml-1">{item.unit}</span>
-                                  <span className="text-muted-foreground/50 mx-1">/</span>
-                                  <span className="text-muted-foreground">
-                                    {item.minQuantity.toLocaleString("pt-BR")}
+                                  <span className="text-muted-foreground ml-1">
+                                    {pluralizeUnit(item.quantity, item.unit)}
                                   </span>
-                                </td>
-                                <td className="px-4 py-2.5 text-right">
-                                  {getStatusBadge(status)}
                                 </td>
                                 <td className="px-3 sm:px-4 py-2.5 text-right whitespace-nowrap">
                                   <div className="flex justify-end gap-2">
