@@ -59,6 +59,7 @@ export type OrderDeadlineStatus =
   | "Dentro do Prazo"
   | "Pedido Atrasado"
   | "Entregue no Prazo"
+  | "Entregue com Atraso"
 
 export interface OrderDeliveryEntry {
   id: string
