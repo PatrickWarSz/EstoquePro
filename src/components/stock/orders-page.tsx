@@ -748,8 +748,8 @@ function CreateOrderDialog({
                 <Input
                   type="number"
                   min="0"
-                  step="0.01"
-                  placeholder="Ex: 26.30"
+                  step="0.0001"
+                  placeholder="Ex: 0.0965"
                   value={pricePerUnit}
                   onChange={(e) => setPricePerUnit(e.target.value)}
                 />
