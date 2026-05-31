@@ -173,7 +173,7 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter, initial
                                 status === "baixo" && "bg-warning/5",
                               )}
                             >
-                              <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-start gap-2">
                                 <button
                                   ref={handle.setActivatorNodeRef}
                                   {...handle.attributes}
@@ -185,17 +185,17 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter, initial
                                   <GripVertical className="h-4 w-4" />
                                 </button>
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-semibold">{item.name}</p>
-                                </div>
-                                <div className={cn(
-                                  "shrink-0 text-right text-sm tabular-nums font-semibold whitespace-nowrap",
-                                  status === "zerado" && "text-destructive",
-                                  status === "baixo" && "text-warning",
-                                )}>
-                                  {item.quantity.toLocaleString("pt-BR")}{" "}
-                                  <span className="text-xs text-muted-foreground font-normal">
-                                    {pluralizeUnit(item.quantity, item.unit, { short: true })}
-                                  </span>
+                                  <p className="text-sm font-semibold break-words leading-snug">{item.name}</p>
+                                  <p className={cn(
+                                    "mt-0.5 text-sm tabular-nums font-semibold",
+                                    status === "zerado" && "text-destructive",
+                                    status === "baixo" && "text-warning",
+                                  )}>
+                                    {item.quantity.toLocaleString("pt-BR")}{" "}
+                                    <span className="text-xs text-muted-foreground font-normal">
+                                      {pluralizeUnit(item.quantity, item.unit, { short: true })}
+                                    </span>
+                                  </p>
                                 </div>
                               </div>
                               <div className="mt-2 flex items-center gap-2">
@@ -270,10 +270,10 @@ export function AllCategoriesView({ statusFilter = "all", onClearFilter, initial
                                     <GripVertical className="h-3.5 w-3.5" />
                                   </button>
                                 </td>
-                                <td className="px-4 py-2.5 font-medium max-w-[200px] lg:max-w-xs truncate">
+                                <td className="px-4 py-2.5 font-medium break-words">
                                   {item.name}
                                 </td>
-                                <td className="px-4 py-2.5 text-muted-foreground text-sm max-w-[220px] truncate">
+                                <td className="px-4 py-2.5 text-muted-foreground text-sm break-words">
                                   {cat.name}
                                 </td>
                                 <td className="px-4 py-2.5 text-right whitespace-nowrap text-sm tabular-nums">

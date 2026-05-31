@@ -116,7 +116,7 @@ export function StockTable({ onViewHistory }: StockTableProps) {
                   zero && "bg-destructive/5",
                   low && "bg-warning/5",
                 )}>
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2">
                   <button
                     ref={handle.setActivatorNodeRef}
                     {...handle.attributes}
@@ -128,18 +128,18 @@ export function StockTable({ onViewHistory }: StockTableProps) {
                     <GripVertical className="h-4 w-4" />
                   </button>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{item.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{item.category}</p>
-                  </div>
-                  <div className={cn(
-                    "shrink-0 text-right text-sm tabular-nums font-semibold whitespace-nowrap",
-                    zero && "text-destructive",
-                    low && "text-warning",
-                  )}>
-                    {item.quantity.toLocaleString("pt-BR")}{" "}
-                    <span className="text-xs text-muted-foreground font-normal">
-                      {pluralizeUnit(item.quantity, item.unit, { short: true })}
-                    </span>
+                    <p className="text-sm font-semibold break-words leading-snug">{item.name}</p>
+                    <p className="text-xs text-muted-foreground break-words">{item.category}</p>
+                    <p className={cn(
+                      "mt-0.5 text-sm tabular-nums font-semibold",
+                      zero && "text-destructive",
+                      low && "text-warning",
+                    )}>
+                      {item.quantity.toLocaleString("pt-BR")}{" "}
+                      <span className="text-xs text-muted-foreground font-normal">
+                        {pluralizeUnit(item.quantity, item.unit, { short: true })}
+                      </span>
+                    </p>
                   </div>
                 </div>
                 <div className="mt-2 flex items-center gap-2">
