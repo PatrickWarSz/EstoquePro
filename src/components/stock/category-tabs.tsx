@@ -48,13 +48,20 @@ export function CategoryTabs({ onEditCategories }: CategoryTabsProps) {
   ).length || 0
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       <Select
         value={selectedCategoryId || undefined}
         onValueChange={setSelectedCategory}
       >
-        <SelectTrigger className="w-full max-w-xs">
-          <SelectValue placeholder="Selecione uma categoria" />
+        <SelectTrigger className="w-full min-w-0 sm:max-w-xs">
+          <SelectValue placeholder="Selecione uma categoria">
+            <span className="block truncate">
+              {selectedCategory?.name}
+              <span className="ml-1 text-xs text-muted-foreground">
+                ({selectedCategory?.items.length ?? 0} {(selectedCategory?.items.length ?? 0) === 1 ? "item" : "itens"})
+              </span>
+            </span>
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {safeCategories.map((category) => {
@@ -67,8 +74,8 @@ export function CategoryTabs({ onEditCategories }: CategoryTabsProps) {
 
             return (
               <SelectItem key={category.id} value={category.id}>
-                <div className="flex items-center gap-2">
-                  <span>{category.name}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="truncate">{category.name}</span>
                   <span className="text-xs text-muted-foreground">
                     ({category.items.length} {category.items.length === 1 ? "item" : "itens"})
                   </span>
@@ -87,9 +94,6 @@ export function CategoryTabs({ onEditCategories }: CategoryTabsProps) {
 
       {selectedCategory && (
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">
-            {selectedCategory.items.length} {selectedCategory.items.length === 1 ? "item" : "itens"}
-          </span>
           {zeroCount > 0 && (
             <span className="flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">
               <XCircle className="h-3 w-3" />
@@ -109,10 +113,11 @@ export function CategoryTabs({ onEditCategories }: CategoryTabsProps) {
         variant="outline"
         size="sm"
         onClick={onEditCategories}
-        className="ml-auto gap-2"
+        className="ml-auto gap-2 shrink-0"
       >
         <Settings className="h-4 w-4" />
-        Gerenciar Categorias
+        <span className="hidden sm:inline">Gerenciar Categorias</span>
+        <span className="sm:hidden">Gerenciar</span>
       </Button>
     </div>
   )

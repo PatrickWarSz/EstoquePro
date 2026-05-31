@@ -239,7 +239,6 @@ export const useAuthStore = create<AuthState>()(
         try {
           const { supabase } = await import('./supabase');
           const workspaceId = get().workspaceId;
-          const workspace = get().workspace;
           if (!workspaceId) return { ok: false, error: 'Sessão inválida.' };
 
           const [usuariosRes, produtosRes, categoriasRes, movRes,
@@ -262,7 +261,7 @@ export const useAuthStore = create<AuthState>()(
               version: '2.0',
               app: 'EstoquePro',
               workspace_id: workspaceId,
-              nome_empresa: workspace?.nomeEmpresa || workspaceId,
+              nome_empresa: workspaceId,
               timestamp,
               totais: {
                 produtos:      (produtosRes.data || []).length,
