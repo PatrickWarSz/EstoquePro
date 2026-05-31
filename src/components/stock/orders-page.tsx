@@ -719,7 +719,7 @@ function CreateOrderDialog({
             </div>
 
             {/* Quantities */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Quantidade Pedida *</Label>
                 <div className="grid grid-cols-[1fr_auto] gap-2">
@@ -728,11 +728,12 @@ function CreateOrderDialog({
                     min="0"
                     step="0.01"
                     placeholder="Ex: 800"
+                    inputMode="decimal"
                     value={quantityOrdered}
                     onChange={(e) => setQuantityOrdered(e.target.value)}
                   />
                   <Input
-                    className="max-w-[90px]"
+                    className="w-[80px]"
                     type="text"
                     placeholder="kg"
                     value={unit}
