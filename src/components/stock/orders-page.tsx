@@ -368,7 +368,7 @@ export function OrdersPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                     {order.deliveryStatus !== "Entrega Completa" && (
                       <Button
                         size="sm"
