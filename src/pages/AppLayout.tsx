@@ -23,21 +23,18 @@ export default function AppLayout() {
   const isMobile = useIsMobile();
 
   useEffect(() => {
-  // Só roda quando o workspaceId está disponível
-  // Evita o initialize() disparar com workspaceId = null no primeiro mount
-  if (!workspaceId) return;
+    if (!workspaceId) return;
 
-  initialize();
-  fetchEmployees();
-  if (typeof refreshSubscription === 'function') refreshSubscription();
-
-  const interval = setInterval(() => {
     initialize();
-  }, 30000);
+    fetchEmployees();
+    if (typeof refreshSubscription === 'function') refreshSubscription();
 
-  return () => clearInterval(interval);
-}, [workspaceId]); // ← reage quando auth hidrata e workspaceId aparece
-}, [])
+    const interval = setInterval(() => {
+      initialize();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [workspaceId]);
 
   // LÓGICA DO KILL SWITCH BLINDADA (Trial e Assinantes)
   const isExpired = () => {
