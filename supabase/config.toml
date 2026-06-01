@@ -467,3 +467,6 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/delete-auth-user/deno.json"
 entrypoint = "./functions/delete-auth-user/index.ts"
+
+[functions.scheduled-backup]
+verify_jwt = false
