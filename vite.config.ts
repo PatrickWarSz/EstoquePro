@@ -39,14 +39,14 @@ export default defineConfig(({ mode }) => ({
         short_name: "EstoquePro",
         description:
           "O fluxo inteligente da matéria-prima que move sua fábrica.",
-        start_url: "/",
+        start_url: "/app/estoque",
         scope: "/",
         display: "standalone",
         orientation: "portrait",
         theme_color: "#2563EB",
         background_color: "#FFFFFF",
         lang: "pt-BR",
-        id: "/?source=pwa",
+        id: "/",
         shortcuts: [ // <--- ADICIONE ESTE BLOCO INTEIRO
           {
             name: "Abrir Scanner",

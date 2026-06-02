@@ -185,7 +185,7 @@ export default function HistoricoPage() {
                   <span className="text-muted-foreground">
                     Por <strong className="text-foreground">{e.operatorName || "—"}</strong>
                   </span>
-                  <span className="font-mono">
+                  <span className="tabular-nums">
                     <span className={e.type === "entrada" ? "text-success" : "text-destructive"}>
                       {e.type === "entrada" ? "+" : "−"}{e.quantity} {pluralizeUnit(e.quantity, e.unit, { short: true })}
                     </span>
@@ -227,10 +227,10 @@ export default function HistoricoPage() {
                         {e.type}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono whitespace-nowrap">
+                    <td className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">
                       {e.quantity} <span className="text-muted-foreground">{pluralizeUnit(e.quantity, e.unit)}</span>
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono font-semibold">{e.newTotal}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{e.newTotal}</td>
                   </tr>
                 ))}
               </tbody>
