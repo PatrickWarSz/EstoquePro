@@ -409,10 +409,15 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
        updateOrder: async (id, up) => {
         const { supabase } = await import('./supabase');
         const dbUp: any = {};
-        if (up.expectedDate !== undefined)     dbUp.data_esperada     = up.expectedDate;
-        if (up.notes !== undefined)            dbUp.observacoes       = up.notes;
-        if (up.productDescription !== undefined) dbUp.descricao       = up.productDescription;
-        if (up.pricePerUnit !== undefined)     dbUp.preco_por_unidade = Number(up.pricePerUnit);
+        if (up.expectedDate !== undefined)       dbUp.data_esperada      = up.expectedDate;
+        if (up.notes !== undefined)              dbUp.observacoes        = up.notes;
+        if (up.productDescription !== undefined) dbUp.descricao          = up.productDescription;
+        if (up.pricePerUnit !== undefined)       dbUp.preco_por_unidade  = Number(up.pricePerUnit);
+        if (up.quantityOrdered !== undefined)    dbUp.quantidade_pedida  = Number(up.quantityOrdered);
+        if (up.unit !== undefined)               dbUp.unidade            = up.unit;
+        if (up.linkedCategoryId !== undefined)   dbUp.categoria_id       = up.linkedCategoryId;
+        if (up.linkedItemId !== undefined)       dbUp.produto_id         = up.linkedItemId;
+        if (up.supplierId !== undefined)         dbUp.fornecedor_id      = up.supplierId;
         await supabase.from('pedidos').update(dbUp).eq('id', id).eq('workspace_id', useAuthStore.getState().workspaceId);
         await get().initialize();
       },
