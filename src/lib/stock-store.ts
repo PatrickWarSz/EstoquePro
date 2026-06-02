@@ -116,8 +116,8 @@ export const useStockStore = create<StockState>()(
           try { const { migrateFromLocalStorage } = await import('./idb-queue'); await migrateFromLocalStorage(); } catch(e) { /* ignore */ }
 
           const [catRes, prodRes, movRes, supRes, locRes, pedRes, entRes, qrRes] = await Promise.all([
-            supabase.from('categorias').select('*').eq('workspace_id', workspaceId),
-            supabase.from('produtos').select('*').eq('workspace_id', workspaceId),
+            supabase.from('categorias').select('*').eq('workspace_id', workspaceId).is('deleted_at', null),
+supabase.from('produtos').select('*').eq('workspace_id', workspaceId).is('deleted_at', null),
             supabase.from('movimentacoes').select('*').eq('workspace_id', workspaceId).order('data', { ascending: false }).limit(500),
             supabase.from('fornecedores').select('*').eq('workspace_id', workspaceId).order('criado_em', { ascending: false }).limit(30),
             supabase.from('locais_estoque').select('*').eq('workspace_id', workspaceId),
@@ -242,7 +242,11 @@ await supabase.from('produtos').insert([{ nome: item.name, quantidade: item.quan
 
       removeItem: async (catId, itemId) => {
         const { supabase } = await import('./supabase');
-        await supabase.from('produtos').delete().eq('id', itemId).eq('workspace_id', useAuthStore.getState().workspaceId);
+        await supabase
+          .from('produtos')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('id', itemId)
+          .eq('workspace_id', useAuthStore.getState().workspaceId);
         await get().initialize();
       },
 
@@ -306,9 +310,20 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
       removeCategory: async (id) => {
         const { supabase } = await import('./supabase');
         const wId = useAuthStore.getState().workspaceId;
-        // Cascade: remove products belonging to this category first (in case FK ON DELETE is not CASCADE)
-        await supabase.from('produtos').delete().eq('categoria_id', id).eq('workspace_id', wId);
-        await supabase.from('categorias').delete().eq('id', id).eq('workspace_id', wId);
+        const now = new Date().toISOString();
+        // Soft delete dos produtos da categoria primeiro
+        await supabase
+          .from('produtos')
+          .update({ deleted_at: now })
+          .eq('categoria_id', id)
+          .eq('workspace_id', wId)
+          .is('deleted_at', null);
+        // Soft delete da categoria
+        await supabase
+          .from('categorias')
+          .update({ deleted_at: now })
+          .eq('id', id)
+          .eq('workspace_id', wId);
         await get().initialize();
       },
 
