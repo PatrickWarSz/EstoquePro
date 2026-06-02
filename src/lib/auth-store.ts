@@ -420,7 +420,21 @@ export const useAuthStore = create<AuthState>()(
           .update(dbUpdates)
           .eq('id', id)
           .eq('workspace_id', workspaceId);
-        
+
+        // Se o funcionário foi desativado, revogar o JWT imediatamente
+        // Sem isso, ele continua operando até o token expirar (1h)
+        if (updates.active === false) {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            await supabase.functions.invoke('revoke-employee-session', {
+              body: { employeeId: id },
+              headers: { Authorization: `Bearer ${session?.access_token}` },
+            });
+          } catch (err) {
+            console.error('[updateEmployee] Falha ao revogar sessão:', err);
+          }
+        }
+
         set({ employees: get().employees.map(e => e.id === id ? { ...e, ...updates } : e) });
       },
 
@@ -452,15 +466,26 @@ export const useAuthStore = create<AuthState>()(
         // Usa service role via Edge Function (anon key não tem permissão para isso)
         try {
           const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+
+          // Revogar sessão primeiro (impede acesso imediato)
+          await supabase.functions.invoke('revoke-employee-session', {
+            body: { employeeId: id },
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          // Depois deletar do Auth (impede login futuro)
           await supabase.functions.invoke('delete-auth-user', {
             body: { userId: id },
-            headers: { Authorization: `Bearer ${session?.access_token}` }
+            headers: { Authorization: `Bearer ${token}` },
           });
-        } catch (err) {
-          console.error('[removeEmployee] Erro ao remover do Auth (não crítico):', err);
+        } catch (err: any) {
+          // Erro visível — não engolir silenciosamente
+          toast.error(`Aviso: sessão do funcionário pode ainda estar ativa. ${err?.message || ''}`);
+          console.error('[removeEmployee] Erro ao revogar/deletar do Auth:', err);
         }
 
-        // 3. Remove do estado local
+        // Remove do estado local
         set({ employees: get().employees.filter(e => e.id !== id) });
       },
 
