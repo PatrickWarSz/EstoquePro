@@ -749,15 +749,16 @@ useEffect(() => {
                 return (
                   <div
   key={`${row.categoryId}:${row.item.id}`}
-  className={`flex items-center gap-3 rounded-md border p-2 transition ${
+  className={`flex flex-col gap-2 rounded-md border p-2 transition ${
     !filled ? "bg-card" :
     syncedType === "entrada" ? "border-green-500 bg-green-500/10" : "border-red-500 bg-red-500/10"
   }`}
 >
+                    <div className="flex items-start gap-2">
                       <button
   type="button"
   onClick={() => toggleRowType(idx)}
-  className={`shrink-0 rounded-md px-2 py-1 text-xs font-bold transition ${
+  className={`shrink-0 mt-0.5 rounded-md px-2 py-1 text-xs font-bold transition ${
     batchType === "entrada" 
       ? "bg-green-500/20 text-green-700" 
       : "bg-red-500/20 text-red-700"
@@ -765,16 +766,18 @@ useEffect(() => {
 >
   {batchType === "entrada" ? "ENT" : "SAÍ"}
 </button>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">
-                        {row.item.name}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground">
-                        Saldo: {row.item.quantity.toLocaleString("pt-BR")}{" "}
-                        {row.item.unit}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium break-words leading-snug">
+                          {row.item.name}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Saldo: {row.item.quantity.toLocaleString("pt-BR")}{" "}
+                          {row.item.unit}
+                        </div>
                       </div>
                     </div>
-                    <Input
+                    <div className="flex items-center gap-2 pl-1">
+                      <Input
                       type="number"
                       inputMode="decimal"
                       min="0"
@@ -782,11 +785,12 @@ useEffect(() => {
                       placeholder="0"
                       value={row.qty}
                       onChange={(e) => updateBatchQty(idx, e.target.value)}
-                      className="h-10 w-24 text-right text-base tabular-nums"
+                      className="h-10 flex-1 text-right text-base tabular-nums"
                     />
-                    <span className="w-10 text-xs text-muted-foreground">
-                      {row.item.unit}
-                    </span>
+                      <span className="w-10 shrink-0 text-xs text-muted-foreground">
+                        {row.item.unit}
+                      </span>
+                    </div>
                   </div>
                 )
               })}
