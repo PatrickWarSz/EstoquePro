@@ -406,12 +406,13 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
         await get().initialize();
       },
 
-      updateOrder: async (id, up) => {
+       updateOrder: async (id, up) => {
         const { supabase } = await import('./supabase');
-       const dbUp: any = {};
-if (up.expectedDate) dbUp.data_esperada = up.expectedDate;
-if (up.notes) dbUp.observacoes = up.notes;
-if (up.productDescription) dbUp.descricao = up.productDescription;
+        const dbUp: any = {};
+        if (up.expectedDate !== undefined)     dbUp.data_esperada     = up.expectedDate;
+        if (up.notes !== undefined)            dbUp.observacoes       = up.notes;
+        if (up.productDescription !== undefined) dbUp.descricao       = up.productDescription;
+        if (up.pricePerUnit !== undefined)     dbUp.preco_por_unidade = Number(up.pricePerUnit);
         await supabase.from('pedidos').update(dbUp).eq('id', id).eq('workspace_id', useAuthStore.getState().workspaceId);
         await get().initialize();
       },
