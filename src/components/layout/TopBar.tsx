@@ -43,7 +43,13 @@ export function TopBar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 w-full items-center gap-2 border-b border-border bg-background/95 px-3 sm:px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+    <header
+      className="sticky top-0 z-40 flex w-full items-center gap-2 border-b border-border bg-background/95 px-3 sm:px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70"
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        height: "calc(3.5rem + env(safe-area-inset-top))",
+      }}
+    >
       <SidebarTrigger className="h-9 w-9 shrink-0" />
 
       <form onSubmit={handleSearch} className="relative hidden sm:block flex-1 max-w-xl">
