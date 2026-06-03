@@ -1,4 +1,4 @@
-import { Search, Moon, Sun, AlertTriangle, LogOut, User as UserIcon, Shield } from "lucide-react";
+import { Search, Moon, Sun, AlertTriangle, LogOut, User as UserIcon, Shield, ArrowLeft } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export function TopBar() {
   const { theme, setTheme } = useTheme();
@@ -24,6 +24,7 @@ export function TopBar() {
   const user = getCurrentUser();
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const location = useLocation();
   const [query, setQuery] = useState("");
 
   const lowOrZero = useMemo(() => {
@@ -42,6 +43,10 @@ export function TopBar() {
     if (q) navigate(`/app/estoque?q=${encodeURIComponent(q)}`);
   };
 
+  // Rotas "raiz" do app — não mostra botão voltar nelas
+  const rootRoutes = ["/app/estoque", "/app", "/app/"];
+  const isRoot = rootRoutes.includes(location.pathname);
+
   return (
     <header
       className="sticky top-0 z-40 flex w-full items-center gap-2 border-b border-border bg-background/95 px-3 sm:px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70"
@@ -51,6 +56,21 @@ export function TopBar() {
       }}
     >
       <SidebarTrigger className="h-9 w-9 shrink-0" />
+
+      {!isRoot && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 shrink-0"
+          onClick={() => {
+            if (window.history.length > 1) navigate(-1);
+            else navigate("/app/estoque");
+          }}
+          aria-label="Voltar"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+      )}
 
       <form onSubmit={handleSearch} className="relative hidden sm:block flex-1 max-w-xl">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
