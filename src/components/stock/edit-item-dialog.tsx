@@ -84,7 +84,7 @@ export function EditItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent onOpenAutoFocus={(e) => e.preventDefault()}>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">

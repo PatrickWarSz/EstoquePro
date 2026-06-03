@@ -658,7 +658,7 @@ function CreateOrderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>{e ? "Editar Pedido" : "Novo Pedido"}</DialogTitle>
           <DialogDescription>
@@ -924,7 +924,7 @@ function RegisterDeliveryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Truck className="h-5 w-5 text-success" />
@@ -1150,7 +1150,7 @@ function EditDeliveryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Pencil className="h-5 w-5 text-amber-600" />
@@ -1315,7 +1315,7 @@ function DeliveryHistoryDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-purple-600" />
@@ -1412,7 +1412,7 @@ function GeneralHistoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh]">
+      <DialogContent className="max-w-4xl max-h-[80vh]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-purple-600" />

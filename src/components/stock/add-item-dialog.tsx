@@ -104,7 +104,7 @@ export function AddItemDialog({ open, onOpenChange, defaultCategoryId }: AddItem
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v) }}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plus className="h-5 w-5 text-primary" />
