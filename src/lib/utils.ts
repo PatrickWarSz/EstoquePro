@@ -20,7 +20,7 @@ export function generateDeliveryMessage(
   const toDeliver = order.quantityOrdered - order.quantityDelivered
   const status = toDeliver > 0 ? `⚠️ Saldo pendente: ${toDeliver.toLocaleString("pt-BR")} ${unit}` : `✅ Pedido entregue integralmente`
 
-  return `📦 *REGISTRO DE ENTREGA — ESTOQUEPRO*
+  return `📦 *REGISTRO DE ENTREGA*
 ━━━━━━━━━━━━━━━━━━━━
 🏷️ *Produto:* ${order.productDescription}
 🏢 *Fornecedor:* ${supplierName}
@@ -34,7 +34,7 @@ ${order.stockEntryQuantity ? `📦 *Lançado no Estoque:* ${order.stockEntryQuan
 ${status}
 ${order.notes ? `\n📝 *Obs:* ${order.notes}` : ""}
 ━━━━━━━━━━━━━━━━━━━━
-_Registrado via EstoquePro · VEXO_`
+_Registrado via EstoquePro`
 }
 
 export function openWhatsAppWeb(message: string) {
