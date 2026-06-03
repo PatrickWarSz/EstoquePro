@@ -120,7 +120,7 @@ export function MovementDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {isEntrada ? (
@@ -174,7 +174,7 @@ export function MovementDialog({
                 placeholder={`Ex: 50`}
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
-                autoFocus
+
                 onKeyDown={(e) => e.key === "Enter" && handleConfirm()}
               />
             </div>
@@ -199,7 +199,7 @@ export function MovementDialog({
                       value={v} 
                       onChange={(e) => updateVolume(index, e.target.value)} 
                       className="h-9"
-                      autoFocus={index === volumes.length - 1}
+
                     />
                     {volumes.length > 1 && (
                       <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => removeVolume(index)}>

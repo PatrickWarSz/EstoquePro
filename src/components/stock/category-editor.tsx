@@ -98,7 +98,7 @@ export function CategoryEditor({ open, onOpenChange }: CategoryEditorProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Pencil className="h-5 w-5 text-primary" />
@@ -145,7 +145,7 @@ export function CategoryEditor({ open, onOpenChange }: CategoryEditorProps) {
                         value={editingName}
                         onChange={(e) => setEditingName(e.target.value)}
                         className="h-8 flex-1"
-                        autoFocus
+
                         onKeyDown={(e) => {
                           if (e.key === "Enter") handleSaveEdit()
                           if (e.key === "Escape") handleCancelEdit()
