@@ -18,23 +18,21 @@ export function generateDeliveryMessage(
   const unit = order.unit || "kg"
   const itemUnit = linkedItemUnit || "un"
   const toDeliver = order.quantityOrdered - order.quantityDelivered
-  const status = toDeliver > 0 ? `⚠️ Saldo pendente: ${toDeliver.toLocaleString("pt-BR")} ${unit}` : `✅ Pedido entregue integralmente`
+  const status = toDeliver > 0 ? `Saldo pendente: ${toDeliver.toLocaleString("pt-BR")} ${unit}` : `Pedido entregue integralmente`
 
-  return `📦 *REGISTRO DE ENTREGA*
+  return `*REGISTRO DE ENTREGA*
 ━━━━━━━━━━━━━━━━━━━━
-🏷️ *Produto:* ${order.productDescription}
-🏢 *Fornecedor:* ${supplierName}
+*Produto:* ${order.productDescription}
+*Fornecedor:* ${supplierName}
 ━━━━━━━━━━━━━━━━━━━━
-📊 *Quantidade Pedida:* ${order.quantityOrdered.toLocaleString("pt-BR")} ${unit}
-✅ *Quantidade Recebida:* ${order.quantityDelivered.toLocaleString("pt-BR")} ${unit}
-${order.stockEntryQuantity ? `📦 *Lançado no Estoque:* ${order.stockEntryQuantity.toLocaleString("pt-BR")} ${itemUnit}` : ""}
+*Quantidade Pedida:* ${order.quantityOrdered.toLocaleString("pt-BR")} ${unit}
+*Quantidade Recebida:* ${order.quantityDelivered.toLocaleString("pt-BR")} ${unit}
+${order.stockEntryQuantity ? `*Lançado no Estoque:* ${order.stockEntryQuantity.toLocaleString("pt-BR")} ${itemUnit}` : ""}
 ━━━━━━━━━━━━━━━━━━━━
-📅 *Previsão de Entrega:* ${formatDate(order.expectedDate)}
-🕐 *Data de Entrega:* ${formatDate(order.deliveryDate)}
+*Previsão de Entrega:* ${formatDate(order.expectedDate)}
+*Data de Entrega:* ${formatDate(order.deliveryDate)}
 ${status}
-${order.notes ? `\n📝 *Obs:* ${order.notes}` : ""}
-━━━━━━━━━━━━━━━━━━━━
-
+${order.notes ? `\n*Obs:* ${order.notes}` : ""}`
 }
 
 export function openWhatsAppWeb(message: string) {
