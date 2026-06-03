@@ -111,7 +111,7 @@ export function EditItemDialog({
                 placeholder="Ex: Suplex PRETO JB"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                autoFocus
+
               />
             </div>
 

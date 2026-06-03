@@ -174,7 +174,7 @@ export function MovementDialog({
                 placeholder={`Ex: 50`}
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
-                autoFocus
+
                 onKeyDown={(e) => e.key === "Enter" && handleConfirm()}
               />
             </div>
@@ -199,7 +199,7 @@ export function MovementDialog({
                       value={v} 
                       onChange={(e) => updateVolume(index, e.target.value)} 
                       className="h-9"
-                      autoFocus={index === volumes.length - 1}
+
                     />
                     {volumes.length > 1 && (
                       <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => removeVolume(index)}>

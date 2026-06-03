@@ -962,7 +962,7 @@ function RegisterDeliveryDialog({
                 placeholder={toDeliver.toString()}
                 value={delivered}
                 onChange={(e) => setDelivered(e.target.value)}
-                autoFocus
+
               />
             </div>
             <div className="space-y-1.5">
@@ -1185,7 +1185,7 @@ function EditDeliveryDialog({
                 step="0.01"
                 value={delivered}
                 onChange={(e) => setDelivered(e.target.value)}
-                autoFocus
+
               />
             </div>
             <div className="space-y-1.5">

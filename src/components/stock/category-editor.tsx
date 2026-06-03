@@ -145,7 +145,7 @@ export function CategoryEditor({ open, onOpenChange }: CategoryEditorProps) {
                         value={editingName}
                         onChange={(e) => setEditingName(e.target.value)}
                         className="h-8 flex-1"
-                        autoFocus
+
                         onKeyDown={(e) => {
                           if (e.key === "Enter") handleSaveEdit()
                           if (e.key === "Escape") handleCancelEdit()

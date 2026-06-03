@@ -153,7 +153,7 @@ export function AddItemDialog({ open, onOpenChange, defaultCategoryId }: AddItem
                         placeholder="Ex: Suplex PRETO JB"
                         value={it.name}
                         onChange={(e) => updateItem(idx, "name", e.target.value)}
-                        autoFocus={idx === 0}
+
                       />
                     </div>
                     <div className="space-y-1.5">
