@@ -1117,9 +1117,7 @@ function EditDeliveryDialog({
     linkedItemId?: string
   }) => void
 }) {
-  const [deliveryDate, setDeliveryDate] = useState(
-    order.deliveryDate ? new Date(order.deliveryDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)
-  )
+  const [deliveryDate, setDeliveryDate] = useState(dateInputValue(order.deliveryDate))
   const [delivered, setDelivered] = useState(order.quantityDelivered?.toString() || "")
   const [stockEntryQuantity, setStockEntryQuantity] = useState(order.stockEntryQuantity?.toString() || "")
   const [notes, setNotes] = useState(order.notes || "")
@@ -1133,6 +1131,7 @@ function EditDeliveryDialog({
   const linkedCatItems =
     categories.find((c: Category) => c.id === linkedCategoryId)?.items || []
   const linkedItem = linkedCatItems.find((item) => item.id === linkedItemId)
+  const isCompletedDelivery = order.deliveryStatus !== "Entrega Incompleta"
 
   const canCreateEntry =
     createEntry &&
@@ -1142,7 +1141,7 @@ function EditDeliveryDialog({
     Number(stockEntryQuantity) > 0
 
   const handleSave = () => {
-    if (!delivered || isNaN(Number(delivered)) || Number(delivered) <= 0) {
+    if (!isCompletedDelivery && (!delivered || isNaN(Number(delivered)) || Number(delivered) <= 0)) {
       toast.error(`Informe a quantidade entregue em ${order.unit || "kg"}`)
       return
     }
@@ -1156,8 +1155,8 @@ function EditDeliveryDialog({
     }
 
     onSave({
-      deliveryDate: new Date(deliveryDate).toISOString(),
-      quantityDelivered: Number(delivered),
+      deliveryDate: dateInputToIso(deliveryDate),
+      quantityDelivered: isCompletedDelivery ? order.quantityDelivered : Number(delivered),
       stockEntryQuantity: alreadyEntered
         ? order.stockEntryQuantity
         : (stockEntryQuantity ? Number(stockEntryQuantity) : undefined),
@@ -1196,35 +1195,36 @@ function EditDeliveryDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Quantidade Entregue ({order.unit || "kg"}) *</Label>
-              <Input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={delivered}
-                onChange={(e) => setDelivered(e.target.value)}
-
-              />
+          {!isCompletedDelivery && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Quantidade Entregue ({order.unit || "kg"}) *</Label>
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={delivered}
+                  onChange={(e) => setDelivered(e.target.value)}
+                />
+              </div>
+              {!alreadyEntered && (
+                <div className="space-y-1.5">
+                  <Label>Quantidade para entrada no estoque ({linkedItem?.unit || "un"})</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Ex: 5"
+                    value={stockEntryQuantity}
+                    onChange={(e) => setStockEntryQuantity(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Informe a quantidade no formato da unidade do item vinculado.
+                  </p>
+                </div>
+              )}
             </div>
-            {!alreadyEntered && (
-            <div className="space-y-1.5">
-              <Label>Quantidade para entrada no estoque ({linkedItem?.unit || "un"})</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Ex: 5"
-                value={stockEntryQuantity}
-                onChange={(e) => setStockEntryQuantity(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Informe a quantidade no formato da unidade do item vinculado.
-              </p>
-            </div>
-            )}
-          </div>
+          )}
 
           {alreadyEntered ? (
             <div className="rounded-lg border border-success/30 bg-success/5 p-3 text-xs text-muted-foreground">
