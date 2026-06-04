@@ -1193,6 +1193,7 @@ function EditDeliveryDialog({
 
               />
             </div>
+            {!alreadyEntered && (
             <div className="space-y-1.5">
               <Label>Quantidade para entrada no estoque ({linkedItem?.unit || "un"})</Label>
               <Input
@@ -1207,9 +1208,19 @@ function EditDeliveryDialog({
                 Informe a quantidade no formato da unidade do item vinculado.
               </p>
             </div>
+            )}
           </div>
 
-          {/* Stock entry section */}
+          {alreadyEntered ? (
+            <div className="rounded-lg border border-success/30 bg-success/5 p-3 text-xs text-muted-foreground">
+              <strong className="text-success">✓ Entrada já lançada no estoque</strong>
+              {order.stockEntryQuantity ? (
+                <span> ({order.stockEntryQuantity} {linkedItem?.unit || "un"})</span>
+              ) : null}
+              . Editar aqui ajusta apenas a data, quantidade entregue e observação — a entrada no estoque não será relançada.
+            </div>
+          ) : (
+          /* Stock entry section */
           <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -1280,6 +1291,7 @@ function EditDeliveryDialog({
               </p>
             )}
           </div>
+          )}
 
           <div className="space-y-1.5">
             <Label>Observação</Label>
