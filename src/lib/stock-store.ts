@@ -151,7 +151,7 @@ supabase.from('produtos').select('*').eq('workspace_id', workspaceId).is('delete
           });
 
          const orders = (pedRes.data ||[]).map(p => {
-             const ents = (entRes.data ||[]).filter(e => e.pedido_id === p.id).map(e => ({ id: e.id, date: e.data, quantity: Number(e.quantidade), stockEntryQuantity: Number(e.quantidade_estoque), notes: e.observacoes, createStockEntry: e.gerou_entrada_estoque }));
+             const ents = (entRes.data ||[]).filter(e => e.pedido_id === p.id).map(e => ({ id: e.id, date: e.data, quantity: Number(e.quantidade), stockEntryQuantity: Number(e.quantidade_estoque), notes: e.observacoes, createStockEntry: e.gerou_entrada_estoque })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
              return { 
                id: p.id, 
                supplierId: p.fornecedor_id, 
@@ -482,16 +482,32 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
   const order = state.orders.find(o => o.id === orderId);
   if (!order) return;
 
-  const totalDel = quantityDelivered;
+  const totalDel = Number(quantityDelivered);
+  const keepFinalizedStatus = order.deliveryStatus !== 'Entrega Incompleta';
+  const nextStockEntryQuantity = stockEntryQuantity ?? order.stockEntryQuantity;
+  const nextNotes = notes !== undefined ? notes : order.notes;
+  const targetDelivery = [...(order.deliveries || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
   
-  await supabase.from('pedidos').update({
+  const { error: pedidoError } = await supabase.from('pedidos').update({
     quantidade_entregue: totalDel,
     status_prazo: calcDeadlineStatus(order.expectedDate, deliveryDate),
-    status_entrega: calcDeliveryStatus(order.quantityOrdered, totalDel),
+    status_entrega: keepFinalizedStatus ? order.deliveryStatus : calcDeliveryStatus(order.quantityOrdered, totalDel),
     entrada_estoque_criada: createStockEntry || order.stockEntryCreated,
-    quantidade_estoque_gerada: stockEntryQuantity || order.stockEntryQuantity,
-    observacoes: notes || order.notes
+    quantidade_estoque_gerada: nextStockEntryQuantity,
+    observacoes: nextNotes || null
   }).eq('id', orderId).eq('workspace_id', wId);
+  if (pedidoError) throw pedidoError;
+
+  if (targetDelivery?.id) {
+    const deliveryUpdate: any = { data: deliveryDate, observacoes: nextNotes || null };
+    if ((order.deliveries || []).length <= 1) {
+      deliveryUpdate.quantidade = totalDel;
+      deliveryUpdate.quantidade_estoque = nextStockEntryQuantity;
+      deliveryUpdate.gerou_entrada_estoque = createStockEntry || order.stockEntryCreated;
+    }
+    const { error: entregaError } = await supabase.from('entregas_pedido').update(deliveryUpdate).eq('id', targetDelivery.id).eq('workspace_id', wId);
+    if (entregaError) throw entregaError;
+  }
 
   await get().initialize();
 },
@@ -682,7 +698,7 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
             stockEntryQuantity: Number(e.quantidade_estoque), 
             notes: e.observacoes, 
             createStockEntry: e.gerou_entrada_estoque 
-          }));
+          })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
           return { 
             id: p.id, 
             supplierId: p.fornecedor_id, 
