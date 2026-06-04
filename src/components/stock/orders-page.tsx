@@ -1234,7 +1234,7 @@ function EditDeliveryDialog({
               ) : null}
               . Editar aqui ajusta apenas a data, quantidade entregue e observação — a entrada no estoque não será relançada.
             </div>
-          ) : (
+          ) : !isCompletedDelivery ? (
           /* Stock entry section */
           <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
             <div className="flex items-center justify-between">
@@ -1306,6 +1306,10 @@ function EditDeliveryDialog({
               </p>
             )}
           </div>
+          ) : (
+            <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+              Pedido já concluído. Editar aqui ajusta apenas a data e observação da entrega.
+            </div>
           )}
 
           <div className="space-y-1.5">
