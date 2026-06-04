@@ -626,7 +626,7 @@ function CreateOrderDialog({
   const e = editingOrder
   const [supplierId, setSupplierId] = useState(e?.supplierId || "")
   const [productDescription, setProductDescription] = useState(e?.productDescription || "")
-  const [orderDate, setOrderDate] = useState(e?.orderDate?.slice(0, 10) || new Date().toISOString().slice(0, 10))
+  const [orderDate, setOrderDate] = useState(dateInputValue(e?.orderDate))
   const [expectedDate, setExpectedDate] = useState(e?.expectedDate?.slice(0, 10) || "")
   const [quantityOrdered, setQuantityOrdered] = useState(e?.quantityOrdered?.toString() || "")
   const [pricePerUnit, setPricePerUnit] = useState(e?.pricePerUnit?.toString() || "")
@@ -651,8 +651,8 @@ function CreateOrderDialog({
       productDescription: productDescription.trim(),
       linkedCategoryId: linkedCategoryId || undefined,
       linkedItemId: linkedItemId || undefined,
-      orderDate: new Date(orderDate).toISOString(),
-      expectedDate: expectedDate ? new Date(expectedDate).toISOString() : undefined,
+      orderDate: dateInputToIso(orderDate),
+      expectedDate: expectedDate ? dateInputToIso(expectedDate) : undefined,
       deliveryDate: e?.deliveryDate,
       quantityOrdered: Number(quantityOrdered),
       quantityDelivered: e?.quantityDelivered || 0,
@@ -891,9 +891,7 @@ function RegisterDeliveryDialog({
     linkedItemId?: string
   }) => void
 }) {
-  const [deliveryDate, setDeliveryDate] = useState(
-    new Date().toISOString().slice(0, 10)
-  )
+  const [deliveryDate, setDeliveryDate] = useState(todayDateInputValue())
   const [delivered, setDelivered] = useState("")
   const [stockEntryQuantity, setStockEntryQuantity] = useState("")
   const [notes, setNotes] = useState("")
@@ -927,7 +925,7 @@ function RegisterDeliveryDialog({
     }
 
     onSave({
-      deliveryDate: new Date(deliveryDate).toISOString(),
+      deliveryDate: dateInputToIso(deliveryDate),
       quantityDelivered: Number(delivered),
       stockEntryQuantity: stockEntryQuantity ? Number(stockEntryQuantity) : undefined,
       notes: notes.trim() || undefined,
