@@ -547,10 +547,15 @@ export function OrdersPage() {
           onOpenChange={(v) => !v && setEditDeliveryOpen(null)}
           order={editDeliveryOpen}
           categories={categories}
-          onSave={(params) => {
-            updateDelivery({ orderId: editDeliveryOpen.id, ...params })
-            toast.success("Entrega atualizada" + (params.createStockEntry ? " e lançamento no estoque ajustado!" : ""))
-            setEditDeliveryOpen(null)
+          onSave={async (params) => {
+            try {
+              await updateDelivery({ orderId: editDeliveryOpen.id, ...params })
+              toast.success("Entrega atualizada" + (params.createStockEntry ? " e lançamento no estoque ajustado!" : ""))
+              setEditDeliveryOpen(null)
+            } catch (error) {
+              console.error("Erro ao atualizar entrega", error)
+              toast.error("Não foi possível salvar a alteração da entrega")
+            }
           }}
         />
       )}
