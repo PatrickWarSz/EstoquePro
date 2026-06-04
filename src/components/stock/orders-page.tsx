@@ -1108,7 +1108,10 @@ function EditDeliveryDialog({
   const [delivered, setDelivered] = useState(order.quantityDelivered?.toString() || "")
   const [stockEntryQuantity, setStockEntryQuantity] = useState(order.stockEntryQuantity?.toString() || "")
   const [notes, setNotes] = useState(order.notes || "")
-  const [createEntry, setCreateEntry] = useState(order.stockEntryCreated || false)
+  // Se a entrada já foi lançada no estoque, NÃO oferecemos lançar de novo
+  // (evita duplicação). Editar aqui só ajusta data/quantidade/observação do pedido.
+  const alreadyEntered = !!order.stockEntryCreated
+  const [createEntry, setCreateEntry] = useState(false)
   const [linkedCategoryId, setLinkedCategoryId] = useState(order.linkedCategoryId || "")
   const [linkedItemId, setLinkedItemId] = useState(order.linkedItemId || "")
 
@@ -1128,11 +1131,11 @@ function EditDeliveryDialog({
       toast.error(`Informe a quantidade entregue em ${order.unit || "kg"}`)
       return
     }
-    if (createEntry && (!linkedCategoryId || !linkedItemId)) {
+    if (!alreadyEntered && createEntry && (!linkedCategoryId || !linkedItemId)) {
       toast.error("Para lançar entrada no estoque, vincule uma categoria e item")
       return
     }
-    if (createEntry && (!stockEntryQuantity || Number(stockEntryQuantity) <= 0)) {
+    if (!alreadyEntered && createEntry && (!stockEntryQuantity || Number(stockEntryQuantity) <= 0)) {
       toast.error("Para lançar entrada no estoque, informe a quantidade de entrada no estoque")
       return
     }
@@ -1140,9 +1143,11 @@ function EditDeliveryDialog({
     onSave({
       deliveryDate: new Date(deliveryDate).toISOString(),
       quantityDelivered: Number(delivered),
-      stockEntryQuantity: stockEntryQuantity ? Number(stockEntryQuantity) : undefined,
+      stockEntryQuantity: alreadyEntered
+        ? order.stockEntryQuantity
+        : (stockEntryQuantity ? Number(stockEntryQuantity) : undefined),
       notes: notes.trim() || undefined,
-      createStockEntry: canCreateEntry,
+      createStockEntry: alreadyEntered ? false : canCreateEntry,
       linkedCategoryId: linkedCategoryId || undefined,
       linkedItemId: linkedItemId || undefined,
     })
