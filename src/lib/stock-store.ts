@@ -112,6 +112,22 @@ export const useStockStore = create<StockState>()(
           const workspaceId = useAuthStore.getState().workspaceId;
           if (!workspaceId) { set({ loading: false }); return; }
 
+          // Garante que a sessão do Supabase está válida antes de consultar
+          // (RLS retorna 0 linhas sem token — sem erro — e zeraria o estado).
+          let { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            try {
+              const { data } = await supabase.auth.refreshSession();
+              session = data.session;
+            } catch { /* ignore */ }
+          }
+          if (!session) {
+            // Sem sessão: NÃO limpa o estado atual — apenas aborta e tenta de novo depois.
+            console.warn('[initialize] sem sessão Supabase — abortando para preservar dados em cache');
+            set({ loading: false });
+            return;
+          }
+
           // Migrate any old localStorage pending queue into IndexedDB before fetching remote data
           try { const { migrateFromLocalStorage } = await import('./idb-queue'); await migrateFromLocalStorage(); } catch(e) { /* ignore */ }
 
