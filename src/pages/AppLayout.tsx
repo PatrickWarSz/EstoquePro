@@ -33,7 +33,22 @@ export default function AppLayout() {
       initialize();
     }, 30000);
 
-    return () => clearInterval(interval);
+    // Re-inicializa quando o token do Supabase é refrescado ou um novo sign-in acontece
+    let unsub: (() => void) | undefined;
+    (async () => {
+      const { supabase } = await import('@/lib/supabase');
+      const { data } = supabase.auth.onAuthStateChange((event) => {
+        if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+          initialize();
+        }
+      });
+      unsub = () => data.subscription.unsubscribe();
+    })();
+
+    return () => {
+      clearInterval(interval);
+      if (unsub) unsub();
+    };
   }, [workspaceId]);
 
   // LÓGICA DO KILL SWITCH BLINDADA (Trial e Assinantes)
