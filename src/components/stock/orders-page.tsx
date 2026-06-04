@@ -56,7 +56,24 @@ import { toast } from "sonner"
 
 function fmtDate(iso?: string) {
   if (!iso) return "—"
+  const datePart = String(iso).slice(0, 10)
+  const match = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`
   return new Date(iso).toLocaleDateString("pt-BR")
+}
+
+function todayDateInputValue() {
+  const now = new Date()
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 10)
+}
+
+function dateInputValue(iso?: string) {
+  return iso ? String(iso).slice(0, 10) : todayDateInputValue()
+}
+
+function dateInputToIso(date: string) {
+  return `${date}T12:00:00.000Z`
 }
 
 function fmtCurrency(val: number) {
