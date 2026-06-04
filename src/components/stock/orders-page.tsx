@@ -1165,7 +1165,7 @@ function EditDeliveryDialog({
       stockEntryQuantity: alreadyEntered
         ? order.stockEntryQuantity
         : (stockEntryQuantity ? Number(stockEntryQuantity) : undefined),
-      notes: notes.trim() || undefined,
+      notes: notes.trim(),
       createStockEntry: alreadyEntered ? false : canCreateEntry,
       linkedCategoryId: linkedCategoryId || undefined,
       linkedItemId: linkedItemId || undefined,
