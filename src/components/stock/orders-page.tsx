@@ -666,7 +666,7 @@ function CreateOrderDialog({
           : "Dentro do Prazo"
         : "Dentro do Prazo",
       deliveryStatus: e?.deliveryStatus || "Entrega Incompleta",
-      notes: notes.trim() || undefined,
+      notes: notes.trim(),
       stockEntryCreated: e?.stockEntryCreated || false,
       deliveries: e?.deliveries || [],
     }
