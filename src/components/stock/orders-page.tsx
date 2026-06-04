@@ -56,7 +56,24 @@ import { toast } from "sonner"
 
 function fmtDate(iso?: string) {
   if (!iso) return "—"
+  const datePart = String(iso).slice(0, 10)
+  const match = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`
   return new Date(iso).toLocaleDateString("pt-BR")
+}
+
+function todayDateInputValue() {
+  const now = new Date()
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 10)
+}
+
+function dateInputValue(iso?: string) {
+  return iso ? String(iso).slice(0, 10) : todayDateInputValue()
+}
+
+function dateInputToIso(date: string) {
+  return `${date}T12:00:00.000Z`
 }
 
 function fmtCurrency(val: number) {
@@ -530,10 +547,15 @@ export function OrdersPage() {
           onOpenChange={(v) => !v && setEditDeliveryOpen(null)}
           order={editDeliveryOpen}
           categories={categories}
-          onSave={(params) => {
-            updateDelivery({ orderId: editDeliveryOpen.id, ...params })
-            toast.success("Entrega atualizada" + (params.createStockEntry ? " e lançamento no estoque ajustado!" : ""))
-            setEditDeliveryOpen(null)
+          onSave={async (params) => {
+            try {
+              await updateDelivery({ orderId: editDeliveryOpen.id, ...params })
+              toast.success("Entrega atualizada" + (params.createStockEntry ? " e lançamento no estoque ajustado!" : ""))
+              setEditDeliveryOpen(null)
+            } catch (error) {
+              console.error("Erro ao atualizar entrega", error)
+              toast.error("Não foi possível salvar a alteração da entrega")
+            }
           }}
         />
       )}
@@ -609,7 +631,7 @@ function CreateOrderDialog({
   const e = editingOrder
   const [supplierId, setSupplierId] = useState(e?.supplierId || "")
   const [productDescription, setProductDescription] = useState(e?.productDescription || "")
-  const [orderDate, setOrderDate] = useState(e?.orderDate?.slice(0, 10) || new Date().toISOString().slice(0, 10))
+  const [orderDate, setOrderDate] = useState(dateInputValue(e?.orderDate))
   const [expectedDate, setExpectedDate] = useState(e?.expectedDate?.slice(0, 10) || "")
   const [quantityOrdered, setQuantityOrdered] = useState(e?.quantityOrdered?.toString() || "")
   const [pricePerUnit, setPricePerUnit] = useState(e?.pricePerUnit?.toString() || "")
@@ -634,8 +656,8 @@ function CreateOrderDialog({
       productDescription: productDescription.trim(),
       linkedCategoryId: linkedCategoryId || undefined,
       linkedItemId: linkedItemId || undefined,
-      orderDate: new Date(orderDate).toISOString(),
-      expectedDate: expectedDate ? new Date(expectedDate).toISOString() : undefined,
+      orderDate: dateInputToIso(orderDate),
+      expectedDate: expectedDate ? dateInputToIso(expectedDate) : undefined,
       deliveryDate: e?.deliveryDate,
       quantityOrdered: Number(quantityOrdered),
       quantityDelivered: e?.quantityDelivered || 0,
@@ -649,7 +671,7 @@ function CreateOrderDialog({
           : "Dentro do Prazo"
         : "Dentro do Prazo",
       deliveryStatus: e?.deliveryStatus || "Entrega Incompleta",
-      notes: notes.trim() || undefined,
+      notes: notes.trim(),
       stockEntryCreated: e?.stockEntryCreated || false,
       deliveries: e?.deliveries || [],
     }
@@ -874,9 +896,7 @@ function RegisterDeliveryDialog({
     linkedItemId?: string
   }) => void
 }) {
-  const [deliveryDate, setDeliveryDate] = useState(
-    new Date().toISOString().slice(0, 10)
-  )
+  const [deliveryDate, setDeliveryDate] = useState(todayDateInputValue())
   const [delivered, setDelivered] = useState("")
   const [stockEntryQuantity, setStockEntryQuantity] = useState("")
   const [notes, setNotes] = useState("")
@@ -910,7 +930,7 @@ function RegisterDeliveryDialog({
     }
 
     onSave({
-      deliveryDate: new Date(deliveryDate).toISOString(),
+      deliveryDate: dateInputToIso(deliveryDate),
       quantityDelivered: Number(delivered),
       stockEntryQuantity: stockEntryQuantity ? Number(stockEntryQuantity) : undefined,
       notes: notes.trim() || undefined,
@@ -1102,9 +1122,7 @@ function EditDeliveryDialog({
     linkedItemId?: string
   }) => void
 }) {
-  const [deliveryDate, setDeliveryDate] = useState(
-    order.deliveryDate ? new Date(order.deliveryDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)
-  )
+  const [deliveryDate, setDeliveryDate] = useState(dateInputValue(order.deliveryDate))
   const [delivered, setDelivered] = useState(order.quantityDelivered?.toString() || "")
   const [stockEntryQuantity, setStockEntryQuantity] = useState(order.stockEntryQuantity?.toString() || "")
   const [notes, setNotes] = useState(order.notes || "")
@@ -1118,6 +1136,7 @@ function EditDeliveryDialog({
   const linkedCatItems =
     categories.find((c: Category) => c.id === linkedCategoryId)?.items || []
   const linkedItem = linkedCatItems.find((item) => item.id === linkedItemId)
+  const isCompletedDelivery = order.deliveryStatus !== "Entrega Incompleta"
 
   const canCreateEntry =
     createEntry &&
@@ -1127,7 +1146,7 @@ function EditDeliveryDialog({
     Number(stockEntryQuantity) > 0
 
   const handleSave = () => {
-    if (!delivered || isNaN(Number(delivered)) || Number(delivered) <= 0) {
+    if (!isCompletedDelivery && (!delivered || isNaN(Number(delivered)) || Number(delivered) <= 0)) {
       toast.error(`Informe a quantidade entregue em ${order.unit || "kg"}`)
       return
     }
@@ -1141,12 +1160,12 @@ function EditDeliveryDialog({
     }
 
     onSave({
-      deliveryDate: new Date(deliveryDate).toISOString(),
-      quantityDelivered: Number(delivered),
+      deliveryDate: dateInputToIso(deliveryDate),
+      quantityDelivered: isCompletedDelivery ? order.quantityDelivered : Number(delivered),
       stockEntryQuantity: alreadyEntered
         ? order.stockEntryQuantity
         : (stockEntryQuantity ? Number(stockEntryQuantity) : undefined),
-      notes: notes.trim() || undefined,
+      notes: notes.trim(),
       createStockEntry: alreadyEntered ? false : canCreateEntry,
       linkedCategoryId: linkedCategoryId || undefined,
       linkedItemId: linkedItemId || undefined,
@@ -1181,35 +1200,36 @@ function EditDeliveryDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Quantidade Entregue ({order.unit || "kg"}) *</Label>
-              <Input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={delivered}
-                onChange={(e) => setDelivered(e.target.value)}
-
-              />
+          {!isCompletedDelivery && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Quantidade Entregue ({order.unit || "kg"}) *</Label>
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={delivered}
+                  onChange={(e) => setDelivered(e.target.value)}
+                />
+              </div>
+              {!alreadyEntered && (
+                <div className="space-y-1.5">
+                  <Label>Quantidade para entrada no estoque ({linkedItem?.unit || "un"})</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Ex: 5"
+                    value={stockEntryQuantity}
+                    onChange={(e) => setStockEntryQuantity(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Informe a quantidade no formato da unidade do item vinculado.
+                  </p>
+                </div>
+              )}
             </div>
-            {!alreadyEntered && (
-            <div className="space-y-1.5">
-              <Label>Quantidade para entrada no estoque ({linkedItem?.unit || "un"})</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Ex: 5"
-                value={stockEntryQuantity}
-                onChange={(e) => setStockEntryQuantity(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Informe a quantidade no formato da unidade do item vinculado.
-              </p>
-            </div>
-            )}
-          </div>
+          )}
 
           {alreadyEntered ? (
             <div className="rounded-lg border border-success/30 bg-success/5 p-3 text-xs text-muted-foreground">
@@ -1219,7 +1239,7 @@ function EditDeliveryDialog({
               ) : null}
               . Editar aqui ajusta apenas a data, quantidade entregue e observação — a entrada no estoque não será relançada.
             </div>
-          ) : (
+          ) : !isCompletedDelivery ? (
           /* Stock entry section */
           <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
             <div className="flex items-center justify-between">
@@ -1291,6 +1311,10 @@ function EditDeliveryDialog({
               </p>
             )}
           </div>
+          ) : (
+            <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+              Pedido já concluído. Editar aqui ajusta apenas a data e observação da entrega.
+            </div>
           )}
 
           <div className="space-y-1.5">

@@ -13,6 +13,9 @@ export function generateDeliveryMessage(
 ): string {
   const formatDate = (dateStr: string | undefined) => {
     if (!dateStr) return "—"
+    const datePart = String(dateStr).slice(0, 10)
+    const match = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (match) return `${match[3]}/${match[2]}/${match[1]}`
     return new Date(dateStr).toLocaleDateString("pt-BR")
   }
   const unit = order.unit || "kg"
