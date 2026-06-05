@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import type { Category, StockItem, HistoryEntry, Supplier, Order, OrderDeliveryEntry, StockLocation } from './types'
 import { useAuthStore } from './auth-store'
 import { toast } from "sonner"
+import { enqueueOp, flushOps, countOps, genTempId, resolveTempId, isTempId, pruneTmpMap, type OpType } from './op-queue'
 
 export type QrAlias = { kind: 'item'; categoryId: string; itemId: string } | { kind: 'location'; locationId: string }
 
