@@ -274,33 +274,85 @@ categories = sortedCats.map(cat => ({
       setSelectedCategory: (id) => set({ selectedCategoryId: id }),
 
       addItem: async (catId, item) => {
-        const { supabase } = await import('./supabase');
         const wId = useAuthStore.getState().workspaceId;
         const cat = get().categories.find(c => c.id === catId);
-const maxPos = (cat?.items || []).reduce((m, it) => Math.max(m, it.posicao ?? 0), 0);
-await supabase.from('produtos').insert([{ nome: item.name, quantidade: item.quantity, estoque_minimo: item.minQuantity || 0, unidade: item.unit || 'un', categoria_id: catId, workspace_id: wId, posicao: maxPos + 1 }]);
-        await get().initialize();
+        const maxPos = (cat?.items || []).reduce((m, it) => Math.max(m, it.posicao ?? 0), 0);
+        const payload = { nome: item.name, quantidade: item.quantity, estoque_minimo: item.minQuantity || 0, unidade: item.unit || 'un', categoria_id: catId, workspace_id: wId, posicao: maxPos + 1 };
+
+        if (isOffline()) {
+          const tmpId = genTempId('item');
+          // Otimista local
+          set((state) => ({
+            categories: state.categories.map(c => c.id !== catId ? c : ({
+              ...c,
+              items: [...c.items, { id: tmpId, name: item.name, quantity: item.quantity, minQuantity: item.minQuantity || 0, unit: item.unit || 'un', categoryId: catId, supplierIds: (item as any).supplierIds || [], posicao: maxPos + 1, history: [] }]
+            }))
+          }) as any);
+          await enqueueOp({ type: 'item.add', payload, workspaceId: wId!, createsTempId: tmpId, refFields: ['categoria_id'] });
+          return;
+        }
+
+        const { supabase } = await import('./supabase');
+        try {
+          const { error } = await supabase.from('produtos').insert([payload]);
+          if (error) throw error;
+          await get().initialize();
+        } catch (err) {
+          await enqueueOp({ type: 'item.add', payload, workspaceId: wId!, createsTempId: genTempId('item'), refFields: ['categoria_id'] });
+          toast.info('Sem conexão — item será criado quando voltar online');
+        }
       },
 
       removeItem: async (catId, itemId) => {
+        const wId = useAuthStore.getState().workspaceId;
+        // Otimista local (remove da lista)
+        set((state) => ({
+          categories: state.categories.map(c => c.id !== catId ? c : ({ ...c, items: c.items.filter(i => i.id !== itemId) }))
+        }) as any);
+
+        if (isOffline() || isTempId(itemId)) {
+          // tempId: se o item.add ainda não subiu, basta enfileirar o remove para depois
+          await enqueueOp({ type: 'item.remove', payload: { id: itemId, workspace_id: wId }, workspaceId: wId!, refFields: ['id'] });
+          return;
+        }
+
         const { supabase } = await import('./supabase');
-        await supabase
-          .from('produtos')
-          .update({ deleted_at: new Date().toISOString() })
-          .eq('id', itemId)
-          .eq('workspace_id', useAuthStore.getState().workspaceId);
-        await get().initialize();
+        try {
+          await supabase.from('produtos').update({ deleted_at: new Date().toISOString() }).eq('id', itemId).eq('workspace_id', wId);
+          await get().initialize();
+        } catch {
+          await enqueueOp({ type: 'item.remove', payload: { id: itemId, workspace_id: wId }, workspaceId: wId!, refFields: ['id'] });
+        }
       },
 
       updateItem: async (catId, itemId, updates) => {
-        const { supabase } = await import('./supabase');
         const dbUp: any = {};
         if (updates.name) dbUp.nome = updates.name;
         if (updates.minQuantity !== undefined) dbUp.estoque_minimo = updates.minQuantity;
         if (updates.unit) dbUp.unidade = updates.unit;
         if (updates.supplierIds) dbUp.fornecedor_ids = updates.supplierIds;
-        await supabase.from('produtos').update(dbUp).eq('id', itemId).eq('workspace_id', useAuthStore.getState().workspaceId);
-        await get().initialize();
+        const wId = useAuthStore.getState().workspaceId;
+
+        // Otimista local
+        set((state) => ({
+          categories: state.categories.map(c => c.id !== catId ? c : ({
+            ...c,
+            items: c.items.map(i => i.id !== itemId ? i : ({ ...i, ...updates }))
+          }))
+        }) as any);
+
+        if (isOffline() || isTempId(itemId)) {
+          await enqueueOp({ type: 'item.update', payload: { id: itemId, workspace_id: wId, ...dbUp }, workspaceId: wId!, refFields: ['id'] });
+          return;
+        }
+
+        const { supabase } = await import('./supabase');
+        try {
+          await supabase.from('produtos').update(dbUp).eq('id', itemId).eq('workspace_id', wId);
+          await get().initialize();
+        } catch {
+          await enqueueOp({ type: 'item.update', payload: { id: itemId, workspace_id: wId, ...dbUp }, workspaceId: wId!, refFields: ['id'] });
+        }
       },
 
       updateItemQuantity: async (catId, itemId, newQ, type, movQ, note, orderId) => {
