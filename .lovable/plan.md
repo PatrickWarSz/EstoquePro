@@ -1,79 +1,73 @@
-# Rebrand visual: VEXO Enterprise Clean
+# Operação Offline Completa
 
-Aplicar a identidade do manual VEXO sobre o app atual, **sem tocar em nenhuma lógica de negócio, fluxo Supabase, scanner ou rotas**. Mudança 100% visual (tokens de cor, tipografia, sidebar header/footer).
+## Objetivo
 
-## 1. Paleta cromática (index.css)
+Garantir que o operador consiga: bipar itens, dar entrada/saída, criar pedidos, registrar entregas, editar itens e consultar histórico **sem internet**. Quando a conexão voltar, tudo sincroniza automaticamente.
 
-Substituir o tema âmbar/laranja pelos tokens VEXO em HSL:
+Cadastros administrativos (funcionário, fornecedor, categoria nova) continuam exigindo internet — são raros e tendem a ser feitos no escritório.
 
-| Token | Cor VEXO | HEX | HSL |
-|---|---|---|---|
-| `--primary` | Azul Confiança | #2563EB | `221 83% 53%` |
-| `--primary-foreground` | branco | #FFFFFF | `0 0% 100%` |
-| `--foreground` | Slate Escuro | #0F172A | `222 47% 11%` |
-| `--muted-foreground` | Slate Médio | #64748B | `215 16% 47%` |
-| `--background` | branco puro | #FFFFFF | `0 0% 100%` |
-| `--card` / popover | branco | #FFFFFF | `0 0% 100%` |
-| `--muted` / sidebar-bg / secondary | Cinza Superfície | #F8FAFC | `210 40% 98%` |
-| `--border` / `--input` | Borda Suave | #E2E8F0 | `214 32% 91%` |
-| `--accent` | azul suave | — | `214 95% 96%` |
-| `--accent-foreground` | primary | #2563EB | `221 83% 53%` |
-| `--ring` | primary | — | `221 83% 53%` |
-| `--sidebar-primary` / accent-foreground | primary | — | `221 83% 53%` |
-| `--destructive` | manter vermelho | — | `0 75% 50%` |
-| `--success` | manter verde | — | `145 55% 38%` |
-| `--warning` | manter âmbar | — | `38 92% 50%` |
+## Princípios
 
-Dark mode: manter a variante mas recalibrar com slate (`--background: 222 47% 11%`, surfaces `217 33% 17%`, primary mais claro `217 91% 60%`) — preservando o caráter Enterprise Clean.
+1. **Local-first**: a UI lê SEMPRE do IndexedDB. A internet só serve para sincronizar.
+2. **Fila confiável**: toda escrita vira um "comando" enfileirado com ID temporário. Reconcilia com o ID real quando subir.
+3. **Sessão longa**: Supabase já guarda refresh token. Vou estender o tempo e tratar o caso "token expirado offline" mantendo o cache visível.
+4. **Feedback claro**: badge no topo mostra "Offline — N pendentes". Cada item/pedido criado offline mostra ícone de "aguardando sync".
 
-Removo `--primary-soft` antigo (laranja) e substituo por azul `214 95% 92%`.
+## Etapas
 
-## 2. Tipografia (index.css)
+### Etapa 1 — Cache local completo (leitura offline)
+- Estender `stock-store.ts` para persistir em IndexedDB (já tem snapshot parcial em localStorage; migrar para IDB com schema versionado).
+- Tabelas a cachear: `categorias`, `itens`, `pedidos`, `entregas_pedido`, `movimentacoes` (últimos 90 dias), `fornecedores`, `funcionarios`.
+- Hidratar a store a partir do IDB no boot **antes** de tentar buscar do Supabase. Tela nunca mais fica em branco.
+- Refresh em background quando online.
 
-Trocar o `@import` Google Fonts por:
-```
-Space Grotesk (600,700) — display
-Inter (400,500,600,700) — UI/texto (já existe)
-JetBrains Mono (400) — operadores > <, SKUs, tagline
-```
-- `body` continua em Inter.
-- Adicionar utilitários: `.font-display { font-family: 'Space Grotesk', sans-serif }` e `.font-mono-vexo { font-family: 'JetBrains Mono', monospace }`.
-- Registrar `fontFamily` no `tailwind.config.ts` (`display`, `mono`).
+### Etapa 2 — Generalizar a fila de escrita
+- Renomear `idb-queue` para `op-queue` com tipos: `movement`, `item.create`, `item.update`, `order.create`, `delivery.register`, `delivery.update`, `order.complete`, etc.
+- Cada operação grava primeiro no cache local (resposta otimista) e enfileira o comando.
+- Worker de sincronização processa em ordem, com retry exponencial. Falha permanente vai pra "caixa de erros" visível pro usuário.
 
-## 3. AppSidebar — selo de marca VEXO
+### Etapa 3 — Reconciliação de IDs
+- Operações offline geram `tempId` (`tmp_<uuid>`). Ao subir, o servidor devolve o ID real e a store reescreve referências (ex: entregas que apontam pro pedido criado offline).
 
-`src/components/layout/AppSidebar.tsx` (apenas o header + adicionar footer, **sem mexer na navegação/permissões**):
+### Etapa 4 — UX de status
+- Badge no `TopBar`: "● Online" / "● Offline — 3 pendentes" / "⚠ 1 erro de sync".
+- Painel acessível listando pendentes e erros, com botão "tentar novamente" e "descartar".
+- Em cada card de item/pedido criado offline, pequeno selo "aguardando sync".
 
-- **Header**: substituir o quadrado laranja com `Boxes` por:
-  - Linha 1: `> V E X O <` em JetBrains Mono, peso 500, tracking expandido, cor `--foreground`; `>` e `<` em `--primary`.
-  - Linha 2 (oculto quando collapsed): "StockKeeper Pro" em Space Grotesk 600.
-  - Linha 3: tagline `software & solutions` em JetBrains Mono 10px, minúsculas, `--muted-foreground`.
-- **Footer** (novo, dentro de `Sidebar`, `SidebarFooter`): `powered by > V E X O <` (mono, 10px, muted), só quando expandido.
-- Ícone (versão collapsed): bloco quadrado `bg-primary` com `> <` em mono branco — substitui o ícone `Boxes`.
+### Etapa 5 — Sessão de 30 dias e boot resiliente
+- Confirmar config do Supabase Auth (`autoRefreshToken: true`, `persistSession: true`) e validar tempo de refresh token no projeto Cloud.
+- No boot: se `getSession()` falhar/expirar e estiver offline → renderiza app a partir do cache local em "modo somente-leitura-de-rede" (escritas continuam indo pra fila). Quando voltar internet, refresha sessão e sobe a fila.
+- Bloqueio só aparece se o usuário ficar 30+ dias offline.
 
-## 4. TopBar e meta
+### Etapa 6 — Service Worker para assets
+- Garantir que JS/CSS/imagens ficam em `CacheFirst` (Workbox já faz). Validar que rota navegacional sempre tem fallback pra `index.html` em cache.
 
-- Em `TopBar.tsx`, o título mobile "Estoque Pro" vira "StockKeeper Pro" em Space Grotesk.
-- `index.html`: atualizar `<title>`, meta description, e `theme-color` para `#2563EB`.
-- `vite.config.ts` (manifest PWA já existente): `theme_color: '#2563EB'`, `background_color: '#FFFFFF'`, `name: 'VEXO StockKeeper Pro'`, `short_name: 'StockKeeper'`.
-- Regenerar `public/pwa-192.png` e `public/pwa-512.png`: fundo `#0F172A` (Slate Escuro) com `> V E X O <` branco centralizado (conforme avatar oficial do manual).
+### Etapa 7 — Testes manuais guiados
+- Roteiro: desligar Wi-Fi → bipar item → dar saída → criar pedido → registrar entrega → ligar Wi-Fi → confirmar que tudo subiu e aparece no histórico do outro celular.
 
-## 5. O que NÃO muda
+## Trade-offs que você precisa saber
 
-- Nenhum arquivo em `src/lib/` (stock-store, auth-store, supabase, qr, idb-queue).
-- Nenhuma página (`EstoquePage`, `ScannerPage`, `PedidosPage`, etc.).
-- Nenhuma rota, permissão, ou componente de scanner.
-- Dialogs/tabelas/cards continuam funcionando — só herdam a nova paleta via tokens.
-- Botão "Instalar PWA" e service worker permanecem como configurados.
+- **Conflito**: se duas pessoas mexem no mesmo item offline, vence quem sincronizar por último (estratégia "last-write-wins"). Para movimentações (entrada/saída) **não há conflito** porque são deltas somados, não substituição.
+- **Estoque "desatualizado" offline**: o operador vê o saldo da última sincronização. Se alguém online já deu saída, ele pode achar que tem mais do que tem. Vou mostrar a hora do último sync no canto.
+- **Pedidos criados offline** não aparecem pra outros usuários até subir.
+- **Primeira abertura precisa de internet** (pra baixar o cache inicial). Depois roda offline.
 
-## Arquivos tocados
+## Entrega faseada
 
-1. `src/index.css` — tokens HSL + fonts
-2. `tailwind.config.ts` — fontFamily display/mono
-3. `src/components/layout/AppSidebar.tsx` — header + footer com selo VEXO
-4. `src/components/layout/TopBar.tsx` — label mobile
-5. `index.html` — title, theme-color, meta
-6. `vite.config.ts` — manifest PWA (cor/nome)
-7. `public/pwa-192.png` + `public/pwa-512.png` — regenerar
+Sugiro fazer em 2 PRs pra você validar entre eles:
+- **Fase A** (etapas 1, 5, 6): cache local + boot resiliente + sessão longa. Já resolve o problema da "tela em branco" e leitura offline.
+- **Fase B** (etapas 2, 3, 4, 7): fila generalizada de escrita + UX de pendentes + reconciliação.
 
-Total: 7 arquivos, zero mudança de lógica.
+## Arquivos principais que vou tocar
+
+- `src/lib/stock-store.ts` (hidratação IDB, escritas otimistas)
+- `src/lib/idb-queue.ts` → `src/lib/op-queue.ts` (generalização)
+- `src/lib/idb-cache.ts` (novo — schema do cache)
+- `src/lib/sync-worker.ts` (novo — processa fila)
+- `src/lib/supabase.ts` (config de sessão)
+- `src/components/layout/TopBar.tsx` (badge online/offline)
+- `src/components/layout/SyncStatusPanel.tsx` (novo)
+- `src/pages/AppLayout.tsx` (boot resiliente)
+- `vite.config.ts` (ajustes finos no Workbox se preciso)
+
+Confirma se faz sentido começar pela **Fase A**? Ou prefere que eu faça tudo de uma vez?

@@ -29,9 +29,17 @@ export default function AppLayout() {
     fetchEmployees();
     if (typeof refreshSubscription === 'function') refreshSubscription();
 
+    // Só refresca do servidor quando há internet — offline preserva o cache local
     const interval = setInterval(() => {
-      initialize();
+      if (typeof navigator === 'undefined' || navigator.onLine) initialize();
     }, 30000);
+
+    // Quando a conexão voltar, reidrata do servidor e tenta sincronizar a fila
+    const onOnline = () => {
+      initialize();
+      try { useStockStore.getState().syncPendingMovements(); } catch (_) {}
+    };
+    window.addEventListener('online', onOnline);
 
     // Re-inicializa quando o token do Supabase é refrescado ou um novo sign-in acontece
     let unsub: (() => void) | undefined;
@@ -47,6 +55,7 @@ export default function AppLayout() {
 
     return () => {
       clearInterval(interval);
+      window.removeEventListener('online', onOnline);
       if (unsub) unsub();
     };
   }, [workspaceId]);

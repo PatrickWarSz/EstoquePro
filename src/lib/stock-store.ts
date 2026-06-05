@@ -121,6 +121,18 @@ export const useStockStore = create<StockState>()(
           const workspaceId = useAuthStore.getState().workspaceId;
           if (!workspaceId) { set({ loading: false }); return; }
 
+          // OFFLINE: se o dispositivo está sem internet, NÃO bate no Supabase.
+          // O zustand persist já reidratou categorias/pedidos/fornecedores/locations
+          // do disco — usamos isso e tentamos sincronizar quando voltar online.
+          if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            console.warn('[initialize] offline — usando cache local');
+            set({ loading: false });
+            try {
+              window.addEventListener('online', () => { get().initialize(); }, { once: true });
+            } catch (_) {}
+            return;
+          }
+
           // Garante que a sessão do Supabase está válida antes de consultar
           // (RLS retorna 0 linhas sem token — sem erro — e zeraria o estado).
           let { data: { session } } = await supabase.auth.getSession();
@@ -819,9 +831,11 @@ fetchMoreHistory: async (itemId?: string) => {
       // nós mantemos uma cópia (cache) dos catálogos na memória do dispositivo.
       partialize: (state) => ({ 
         selectedCategoryId: state.selectedCategoryId,
-        categories: state.categories, // O Scanner precisa disso offline
-        locations: state.locations,   // O Scanner de Prateleiras precisa disso
-        qrAliases: state.qrAliases    // Os links dos QR Codes
+        categories: state.categories, // Catálogo + histórico (offline)
+        locations: state.locations,   // Locais (Scanner de Prateleiras)
+        qrAliases: state.qrAliases,   // Links dos QR Codes
+        suppliers: state.suppliers,   // Fornecedores (offline)
+        orders: state.orders          // Pedidos (offline)
       })
     }
   )
