@@ -831,9 +831,11 @@ fetchMoreHistory: async (itemId?: string) => {
       // nós mantemos uma cópia (cache) dos catálogos na memória do dispositivo.
       partialize: (state) => ({ 
         selectedCategoryId: state.selectedCategoryId,
-        categories: state.categories, // O Scanner precisa disso offline
-        locations: state.locations,   // O Scanner de Prateleiras precisa disso
-        qrAliases: state.qrAliases    // Os links dos QR Codes
+        categories: state.categories, // Catálogo + histórico (offline)
+        locations: state.locations,   // Locais (Scanner de Prateleiras)
+        qrAliases: state.qrAliases,   // Links dos QR Codes
+        suppliers: state.suppliers,   // Fornecedores (offline)
+        orders: state.orders          // Pedidos (offline)
       })
     }
   )
