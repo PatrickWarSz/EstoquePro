@@ -264,10 +264,11 @@ categories = sortedCats.map(cat => ({
 
           // Register online handler to attempt sync when connection is restored
           try {
-            window.addEventListener('online', () => { get().syncPendingMovements(); });
+            window.addEventListener('online', () => { get().syncPendingMovements(); get().syncPendingOps(); });
             // Also refresh pending count / attempt sync now if online
             if (typeof navigator !== 'undefined' && navigator.onLine) {
               get().syncPendingMovements();
+              get().syncPendingOps();
             }
           } catch (_) {}
         } catch { set({ loading: false }); }
