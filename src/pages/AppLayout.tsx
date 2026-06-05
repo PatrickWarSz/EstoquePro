@@ -38,6 +38,7 @@ export default function AppLayout() {
     const onOnline = () => {
       initialize();
       try { useStockStore.getState().syncPendingMovements(); } catch (_) {}
+      try { useStockStore.getState().syncPendingOps(); } catch (_) {}
     };
     window.addEventListener('online', onOnline);
 
