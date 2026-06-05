@@ -1,4 +1,4 @@
-import { Search, Moon, Sun, AlertTriangle, LogOut, User as UserIcon, Shield, ArrowLeft } from "lucide-react";
+import { Search, Moon, Sun, AlertTriangle, LogOut, User as UserIcon, Shield, ArrowLeft, Wifi, WifiOff, CloudUpload } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { countPendingMovements } from "@/lib/idb-queue";
 
 export function TopBar() {
   const { theme, setTheme } = useTheme();
@@ -26,6 +27,29 @@ export function TopBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [query, setQuery] = useState("");
+
+  // Status online/offline + contagem de operações pendentes na fila
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== "undefined" ? navigator.onLine : true,
+  );
+  const [pendingCount, setPendingCount] = useState<number>(0);
+
+  useEffect(() => {
+    const onUp = () => setIsOnline(true);
+    const onDown = () => setIsOnline(false);
+    window.addEventListener("online", onUp);
+    window.addEventListener("offline", onDown);
+    const refresh = async () => {
+      try { setPendingCount(await countPendingMovements()); } catch { /* ignore */ }
+    };
+    refresh();
+    const id = setInterval(refresh, 5000);
+    return () => {
+      window.removeEventListener("online", onUp);
+      window.removeEventListener("offline", onDown);
+      clearInterval(id);
+    };
+  }, []);
 
   const lowOrZero = useMemo(() => {
     let n = 0;
@@ -91,6 +115,26 @@ export function TopBar() {
       </div>
 
       <div className="ml-auto flex items-center gap-1 sm:gap-2">
+        {/* Status de conexão / sincronização */}
+        {!isOnline ? (
+          <span
+            className="flex items-center gap-1 rounded-full border border-destructive/40 bg-destructive/10 px-2 sm:px-3 py-1 text-xs font-medium text-destructive"
+            title="Sem internet — o app continua funcionando e sincroniza quando conectar"
+          >
+            <WifiOff className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Offline</span>
+            {pendingCount > 0 && <span>· {pendingCount}</span>}
+          </span>
+        ) : pendingCount > 0 ? (
+          <span
+            className="flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 sm:px-3 py-1 text-xs font-medium text-warning"
+            title={`${pendingCount} operação(ões) sendo sincronizada(s)`}
+          >
+            <CloudUpload className="h-3.5 w-3.5 animate-pulse" />
+            <span>{pendingCount}</span>
+          </span>
+        ) : null}
+
         {lowOrZero > 0 && (
           <button
             onClick={() => navigate("/estoque")}
