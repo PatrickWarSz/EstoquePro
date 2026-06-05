@@ -17,6 +17,10 @@ function getCurrentOperator(): { id?: string; name?: string } {
 
 const generateId = () => Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
 
+function isOffline(): boolean {
+  return typeof navigator !== 'undefined' && !navigator.onLine
+}
+
 function dateOnly(value?: string) {
   return value ? String(value).slice(0, 10) : '';
 }
