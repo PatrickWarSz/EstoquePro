@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import type { Category, StockItem, HistoryEntry, Supplier, Order, OrderDeliveryEntry, StockLocation } from './types'
 import { useAuthStore } from './auth-store'
 import { toast } from "sonner"
+import { enqueueOp, flushOps, countOps, genTempId, isTempId, pruneTmpMap, type OpType } from './op-queue'
 
 export type QrAlias = { kind: 'item'; categoryId: string; itemId: string } | { kind: 'location'; locationId: string }
 
@@ -15,6 +16,10 @@ function getCurrentOperator(): { id?: string; name?: string } {
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
+
+function isOffline(): boolean {
+  return typeof navigator !== 'undefined' && !navigator.onLine
+}
 
 function dateOnly(value?: string) {
   return value ? String(value).slice(0, 10) : '';
@@ -87,6 +92,8 @@ export interface StockState {
   removeQrAlias: (k: string) => Promise<void>;
   syncPendingMovements: () => Promise<void>;
   pendingMovementsCount: () => Promise<number>;
+  pendingOpsCount: () => Promise<number>;
+  syncPendingOps: () => Promise<void>;
   applyBatchMovements: (moves: Array<{ categoryId: string; itemId: string; newQ: number; type: 'entrada' | 'saida'; movQ: number; note?: string; orderId?: string }>) => Promise<void>;
   
   // Pagination fetch functions
@@ -257,10 +264,11 @@ categories = sortedCats.map(cat => ({
 
           // Register online handler to attempt sync when connection is restored
           try {
-            window.addEventListener('online', () => { get().syncPendingMovements(); });
+            window.addEventListener('online', () => { get().syncPendingMovements(); get().syncPendingOps(); });
             // Also refresh pending count / attempt sync now if online
             if (typeof navigator !== 'undefined' && navigator.onLine) {
               get().syncPendingMovements();
+              get().syncPendingOps();
             }
           } catch (_) {}
         } catch { set({ loading: false }); }
@@ -269,33 +277,85 @@ categories = sortedCats.map(cat => ({
       setSelectedCategory: (id) => set({ selectedCategoryId: id }),
 
       addItem: async (catId, item) => {
-        const { supabase } = await import('./supabase');
         const wId = useAuthStore.getState().workspaceId;
         const cat = get().categories.find(c => c.id === catId);
-const maxPos = (cat?.items || []).reduce((m, it) => Math.max(m, it.posicao ?? 0), 0);
-await supabase.from('produtos').insert([{ nome: item.name, quantidade: item.quantity, estoque_minimo: item.minQuantity || 0, unidade: item.unit || 'un', categoria_id: catId, workspace_id: wId, posicao: maxPos + 1 }]);
-        await get().initialize();
+        const maxPos = (cat?.items || []).reduce((m, it) => Math.max(m, it.posicao ?? 0), 0);
+        const payload = { nome: item.name, quantidade: item.quantity, estoque_minimo: item.minQuantity || 0, unidade: item.unit || 'un', categoria_id: catId, workspace_id: wId, posicao: maxPos + 1 };
+
+        if (isOffline()) {
+          const tmpId = genTempId('item');
+          // Otimista local
+          set((state) => ({
+            categories: state.categories.map(c => c.id !== catId ? c : ({
+              ...c,
+              items: [...c.items, { id: tmpId, name: item.name, quantity: item.quantity, minQuantity: item.minQuantity || 0, unit: item.unit || 'un', categoryId: catId, supplierIds: (item as any).supplierIds || [], posicao: maxPos + 1, history: [] }]
+            }))
+          }) as any);
+          await enqueueOp({ type: 'item.add', payload, workspaceId: wId!, createsTempId: tmpId, refFields: ['categoria_id'] });
+          return;
+        }
+
+        const { supabase } = await import('./supabase');
+        try {
+          const { error } = await supabase.from('produtos').insert([payload]);
+          if (error) throw error;
+          await get().initialize();
+        } catch (err) {
+          await enqueueOp({ type: 'item.add', payload, workspaceId: wId!, createsTempId: genTempId('item'), refFields: ['categoria_id'] });
+          toast.info('Sem conexão — item será criado quando voltar online');
+        }
       },
 
       removeItem: async (catId, itemId) => {
+        const wId = useAuthStore.getState().workspaceId;
+        // Otimista local (remove da lista)
+        set((state) => ({
+          categories: state.categories.map(c => c.id !== catId ? c : ({ ...c, items: c.items.filter(i => i.id !== itemId) }))
+        }) as any);
+
+        if (isOffline() || isTempId(itemId)) {
+          // tempId: se o item.add ainda não subiu, basta enfileirar o remove para depois
+          await enqueueOp({ type: 'item.remove', payload: { id: itemId, workspace_id: wId }, workspaceId: wId!, refFields: ['id'] });
+          return;
+        }
+
         const { supabase } = await import('./supabase');
-        await supabase
-          .from('produtos')
-          .update({ deleted_at: new Date().toISOString() })
-          .eq('id', itemId)
-          .eq('workspace_id', useAuthStore.getState().workspaceId);
-        await get().initialize();
+        try {
+          await supabase.from('produtos').update({ deleted_at: new Date().toISOString() }).eq('id', itemId).eq('workspace_id', wId);
+          await get().initialize();
+        } catch {
+          await enqueueOp({ type: 'item.remove', payload: { id: itemId, workspace_id: wId }, workspaceId: wId!, refFields: ['id'] });
+        }
       },
 
       updateItem: async (catId, itemId, updates) => {
-        const { supabase } = await import('./supabase');
         const dbUp: any = {};
         if (updates.name) dbUp.nome = updates.name;
         if (updates.minQuantity !== undefined) dbUp.estoque_minimo = updates.minQuantity;
         if (updates.unit) dbUp.unidade = updates.unit;
         if (updates.supplierIds) dbUp.fornecedor_ids = updates.supplierIds;
-        await supabase.from('produtos').update(dbUp).eq('id', itemId).eq('workspace_id', useAuthStore.getState().workspaceId);
-        await get().initialize();
+        const wId = useAuthStore.getState().workspaceId;
+
+        // Otimista local
+        set((state) => ({
+          categories: state.categories.map(c => c.id !== catId ? c : ({
+            ...c,
+            items: c.items.map(i => i.id !== itemId ? i : ({ ...i, ...updates }))
+          }))
+        }) as any);
+
+        if (isOffline() || isTempId(itemId)) {
+          await enqueueOp({ type: 'item.update', payload: { id: itemId, workspace_id: wId, ...dbUp }, workspaceId: wId!, refFields: ['id'] });
+          return;
+        }
+
+        const { supabase } = await import('./supabase');
+        try {
+          await supabase.from('produtos').update(dbUp).eq('id', itemId).eq('workspace_id', wId);
+          await get().initialize();
+        } catch {
+          await enqueueOp({ type: 'item.update', payload: { id: itemId, workspace_id: wId, ...dbUp }, workspaceId: wId!, refFields: ['id'] });
+        }
       },
 
       updateItemQuantity: async (catId, itemId, newQ, type, movQ, note, orderId) => {
@@ -439,27 +499,68 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
       },
 
       addOrder: async (o) => {
-        const { supabase } = await import('./supabase');
         const wId = useAuthStore.getState().workspaceId;
-        await supabase.from('pedidos').insert([{ 
-  workspace_id: wId, 
-  fornecedor_id: o.supplierId, 
-  produto_id: o.linkedItemId, 
-  categoria_id: o.linkedCategoryId, 
-  unidade: o.unit, 
-  preco_por_unidade: o.pricePerUnit || 0,
-  quantidade_pedida: o.quantityOrdered, 
-  data_esperada: o.expectedDate, 
-  status_prazo: o.deadlineStatus, 
-  status_entrega: o.deliveryStatus, 
-  observacoes: o.notes,
-  descricao: o.productDescription
-}]);
-        await get().initialize();
+        const payload: any = {
+          workspace_id: wId,
+          fornecedor_id: o.supplierId,
+          produto_id: o.linkedItemId,
+          categoria_id: o.linkedCategoryId,
+          unidade: o.unit,
+          preco_por_unidade: o.pricePerUnit || 0,
+          quantidade_pedida: o.quantityOrdered,
+          data_esperada: o.expectedDate,
+          status_prazo: o.deadlineStatus,
+          status_entrega: o.deliveryStatus,
+          observacoes: o.notes,
+          descricao: o.productDescription,
+        };
+
+        const doOptimisticAdd = (tmpId: string) => {
+          const local: Order = {
+            id: tmpId,
+            supplierId: o.supplierId,
+            linkedCategoryId: o.linkedCategoryId,
+            linkedItemId: o.linkedItemId,
+            unit: o.unit,
+            quantityOrdered: Number(o.quantityOrdered) || 0,
+            quantityDelivered: 0,
+            expectedDate: o.expectedDate,
+            deliveryDate: undefined,
+            deadlineStatus: o.deadlineStatus,
+            deliveryStatus: o.deliveryStatus,
+            notes: o.notes,
+            stockEntryCreated: false,
+            stockEntryQuantity: 0,
+            deliveries: [],
+            productDescription: o.productDescription || 'Pedido sem descrição',
+            orderDate: new Date().toISOString(),
+            quantityReturned: 0,
+            pricePerUnit: Number(o.pricePerUnit) || 0,
+          } as any;
+          set((state) => ({ orders: [local, ...state.orders] }) as any);
+        };
+
+        if (isOffline()) {
+          const tmpId = genTempId('order');
+          doOptimisticAdd(tmpId);
+          await enqueueOp({ type: 'order.add', payload, workspaceId: wId!, createsTempId: tmpId, refFields: ['fornecedor_id', 'produto_id', 'categoria_id'] });
+          return;
+        }
+
+        const { supabase } = await import('./supabase');
+        try {
+          const { error } = await supabase.from('pedidos').insert([payload]);
+          if (error) throw error;
+          await get().initialize();
+        } catch {
+          const tmpId = genTempId('order');
+          doOptimisticAdd(tmpId);
+          await enqueueOp({ type: 'order.add', payload, workspaceId: wId!, createsTempId: tmpId, refFields: ['fornecedor_id', 'produto_id', 'categoria_id'] });
+          toast.info('Sem conexão — pedido será criado quando voltar online');
+        }
       },
 
        updateOrder: async (id, up) => {
-        const { supabase } = await import('./supabase');
         const dbUp: any = {};
         if (up.expectedDate !== undefined)       dbUp.data_esperada      = up.expectedDate;
         if (up.notes !== undefined)              dbUp.observacoes        = up.notes;
@@ -470,34 +571,106 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
         if (up.linkedCategoryId !== undefined)   dbUp.categoria_id       = up.linkedCategoryId;
         if (up.linkedItemId !== undefined)       dbUp.produto_id         = up.linkedItemId;
         if (up.supplierId !== undefined)         dbUp.fornecedor_id      = up.supplierId;
-        await supabase.from('pedidos').update(dbUp).eq('id', id).eq('workspace_id', useAuthStore.getState().workspaceId);
-        await get().initialize();
+        const wId = useAuthStore.getState().workspaceId;
+
+        // Otimista local
+        set((state) => ({
+          orders: state.orders.map(o => o.id !== id ? o : ({ ...o, ...up }))
+        }) as any);
+
+        if (isOffline() || isTempId(id)) {
+          await enqueueOp({ type: 'order.update', payload: { id, workspace_id: wId, ...dbUp }, workspaceId: wId!, refFields: ['id', 'fornecedor_id', 'produto_id', 'categoria_id'] });
+          return;
+        }
+
+        const { supabase } = await import('./supabase');
+        try {
+          await supabase.from('pedidos').update(dbUp).eq('id', id).eq('workspace_id', wId);
+          await get().initialize();
+        } catch {
+          await enqueueOp({ type: 'order.update', payload: { id, workspace_id: wId, ...dbUp }, workspaceId: wId!, refFields: ['id', 'fornecedor_id', 'produto_id', 'categoria_id'] });
+        }
       },
 
       removeOrder: async (id) => {
+        const wId = useAuthStore.getState().workspaceId;
+        set((state) => ({ orders: state.orders.filter(o => o.id !== id) }) as any);
+
+        if (isOffline() || isTempId(id)) {
+          await enqueueOp({ type: 'order.remove', payload: { id, workspace_id: wId }, workspaceId: wId!, refFields: ['id'] });
+          return;
+        }
+
         const { supabase } = await import('./supabase');
-        await supabase.from('pedidos').delete().eq('id', id).eq('workspace_id', useAuthStore.getState().workspaceId);
-        await get().initialize();
+        try {
+          await supabase.from('pedidos').delete().eq('id', id).eq('workspace_id', wId);
+          await get().initialize();
+        } catch {
+          await enqueueOp({ type: 'order.remove', payload: { id, workspace_id: wId }, workspaceId: wId!, refFields: ['id'] });
+        }
       },
 
       registerDelivery: async ({ orderId, deliveryDate, quantityDelivered, stockEntryQuantity, notes, createStockEntry }) => {
-        const { supabase } = await import('./supabase');
         const wId = useAuthStore.getState().workspaceId;
         const state = get();
         const order = state.orders.find(o => o.id === orderId);
         if (!order) return;
         const totalDel = order.quantityDelivered + quantityDelivered;
-        await supabase.from('entregas_pedido').insert([{ workspace_id: wId, pedido_id: orderId, data: deliveryDate, quantidade: quantityDelivered, quantidade_estoque: stockEntryQuantity, observacoes: notes, gerou_entrada_estoque: createStockEntry }]);
-        await supabase.from('pedidos').update({ quantidade_entregue: totalDel, status_prazo: calcDeadlineStatus(order.expectedDate, deliveryDate), status_entrega: calcDeliveryStatus(order.quantityOrdered, totalDel), entrada_estoque_criada: createStockEntry || order.stockEntryCreated }).eq('id', orderId);
-        if (createStockEntry && order.linkedCategoryId && order.linkedItemId && stockEntryQuantity > 0) {
-          const item = state.categories.find(c => c.id === order.linkedCategoryId)?.items.find(i => i.id === order.linkedItemId);
-          if (item) await state.updateItemQuantity(order.linkedCategoryId, order.linkedItemId, item.quantity + stockEntryQuantity, 'entrada', stockEntryQuantity, `Chegada de Pedido #${orderId.slice(-6).toUpperCase()}`, orderId);
+        const newDeadline = calcDeadlineStatus(order.expectedDate, deliveryDate);
+        const newDelivery = calcDeliveryStatus(order.quantityOrdered, totalDel);
+        const newStockCreatedFlag = createStockEntry || order.stockEntryCreated;
+
+        // Otimista local: aplica em qualquer caso (online/offline)
+        const localDeliveryId = genTempId('delivery');
+        set((s) => ({
+          orders: s.orders.map(o => o.id !== orderId ? o : ({
+            ...o,
+            quantityDelivered: totalDel,
+            deadlineStatus: newDeadline,
+            deliveryStatus: newDelivery,
+            stockEntryCreated: newStockCreatedFlag,
+            stockEntryQuantity: (createStockEntry ? (o.stockEntryQuantity || 0) + stockEntryQuantity : o.stockEntryQuantity),
+            deliveryDate,
+            deliveries: [{ id: localDeliveryId, date: deliveryDate, quantity: quantityDelivered, stockEntryQuantity, notes, createStockEntry }, ...(o.deliveries || [])]
+          }))
+        }) as any);
+
+        const entregaPayload: any = { workspace_id: wId, pedido_id: orderId, data: deliveryDate, quantidade: quantityDelivered, quantidade_estoque: stockEntryQuantity, observacoes: notes, gerou_entrada_estoque: createStockEntry };
+        const pedidoUpdatePayload: any = { id: orderId, workspace_id: wId, quantidade_entregue: totalDel, status_prazo: newDeadline, status_entrega: newDelivery, entrada_estoque_criada: newStockCreatedFlag };
+
+        const enqueueDeliveryOps = async () => {
+          await enqueueOp({ type: 'delivery.register', payload: entregaPayload, workspaceId: wId!, refFields: ['pedido_id'] });
+          await enqueueOp({ type: 'order.update', payload: pedidoUpdatePayload, workspaceId: wId!, refFields: ['id'] });
+        };
+
+        if (isOffline() || isTempId(orderId)) {
+          await enqueueDeliveryOps();
+          if (createStockEntry && order.linkedCategoryId && order.linkedItemId && stockEntryQuantity > 0) {
+            const item = state.categories.find(c => c.id === order.linkedCategoryId)?.items.find(i => i.id === order.linkedItemId);
+            if (item) await get().updateItemQuantity(order.linkedCategoryId, order.linkedItemId, item.quantity + stockEntryQuantity, 'entrada', stockEntryQuantity, `Chegada de Pedido #${String(orderId).slice(-6).toUpperCase()}`, orderId);
+          }
+          return;
         }
-        await get().initialize();
+
+        const { supabase } = await import('./supabase');
+        try {
+          const { error: e1 } = await supabase.from('entregas_pedido').insert([entregaPayload]);
+          if (e1) throw e1;
+          const { error: e2 } = await supabase.from('pedidos').update({ quantidade_entregue: totalDel, status_prazo: newDeadline, status_entrega: newDelivery, entrada_estoque_criada: newStockCreatedFlag }).eq('id', orderId);
+          if (e2) throw e2;
+          if (createStockEntry && order.linkedCategoryId && order.linkedItemId && stockEntryQuantity > 0) {
+            const item = state.categories.find(c => c.id === order.linkedCategoryId)?.items.find(i => i.id === order.linkedItemId);
+            if (item) await state.updateItemQuantity(order.linkedCategoryId, order.linkedItemId, item.quantity + stockEntryQuantity, 'entrada', stockEntryQuantity, `Chegada de Pedido #${orderId.slice(-6).toUpperCase()}`, orderId);
+          }
+          await get().initialize();
+        } catch (err) {
+          console.warn('[registerDelivery] falha online — enfileirando', err);
+          await enqueueDeliveryOps();
+          toast.info('Sem conexão — entrega será sincronizada depois');
+        }
       },
 
       updateDelivery: async ({ orderId, deliveryDate, quantityDelivered, stockEntryQuantity, notes, createStockEntry, linkedCategoryId, linkedItemId }) => {
-  const { supabase } = await import('./supabase');
   const wId = useAuthStore.getState().workspaceId;
   const state = get();
   const order = state.orders.find(o => o.id === orderId);
@@ -508,11 +681,50 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
   const nextStockEntryQuantity = stockEntryQuantity ?? order.stockEntryQuantity;
   const nextNotes = notes !== undefined ? notes : order.notes;
   const targetDelivery = [...(order.deliveries || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+  const nextDeadline = calcDeadlineStatus(order.expectedDate, deliveryDate);
+  const nextDeliveryStatus = keepFinalizedStatus ? order.deliveryStatus : calcDeliveryStatus(order.quantityOrdered, totalDel);
+
+  // Otimista local
+  set((s) => ({
+    orders: s.orders.map(o => o.id !== orderId ? o : ({
+      ...o,
+      quantityDelivered: totalDel,
+      deadlineStatus: nextDeadline,
+      deliveryStatus: nextDeliveryStatus,
+      stockEntryCreated: createStockEntry || o.stockEntryCreated,
+      stockEntryQuantity: nextStockEntryQuantity,
+      notes: nextNotes,
+      deliveryDate,
+      deliveries: (o.deliveries || []).map(d => d.id === targetDelivery?.id ? ({ ...d, date: deliveryDate, quantity: (o.deliveries || []).length <= 1 ? totalDel : d.quantity, stockEntryQuantity: (o.deliveries || []).length <= 1 ? nextStockEntryQuantity : d.stockEntryQuantity, notes: nextNotes ?? d.notes }) : d)
+    }))
+  }) as any);
+
+  const pedidoUpd: any = { id: orderId, workspace_id: wId, quantidade_entregue: totalDel, status_prazo: nextDeadline, status_entrega: nextDeliveryStatus, entrada_estoque_criada: createStockEntry || order.stockEntryCreated, quantidade_estoque_gerada: nextStockEntryQuantity, observacoes: nextNotes || null };
+
+  if (isOffline() || isTempId(orderId) || (targetDelivery?.id && isTempId(targetDelivery.id))) {
+    await enqueueOp({ type: 'order.update', payload: pedidoUpd, workspaceId: wId!, refFields: ['id'] });
+    if (targetDelivery?.id) {
+      const deliveryUpdate: any = { id: targetDelivery.id, workspace_id: wId, data: deliveryDate, observacoes: nextNotes || null };
+      if ((order.deliveries || []).length <= 1) {
+        deliveryUpdate.quantidade = totalDel;
+        deliveryUpdate.quantidade_estoque = nextStockEntryQuantity;
+        deliveryUpdate.gerou_entrada_estoque = createStockEntry || order.stockEntryCreated;
+      }
+      // Se a entrega ainda nem subiu (tmp_), só ignoramos — quando ela subir, irá com os valores atuais.
+      if (!isTempId(targetDelivery.id)) {
+        await enqueueOp({ type: 'delivery.update', payload: deliveryUpdate, workspaceId: wId!, refFields: ['id'] });
+      }
+    }
+    return;
+  }
   
+  const { supabase } = await import('./supabase');
+  try {
   const { error: pedidoError } = await supabase.from('pedidos').update({
     quantidade_entregue: totalDel,
-    status_prazo: calcDeadlineStatus(order.expectedDate, deliveryDate),
-    status_entrega: keepFinalizedStatus ? order.deliveryStatus : calcDeliveryStatus(order.quantityOrdered, totalDel),
+    status_prazo: nextDeadline,
+    status_entrega: nextDeliveryStatus,
     entrada_estoque_criada: createStockEntry || order.stockEntryCreated,
     quantidade_estoque_gerada: nextStockEntryQuantity,
     observacoes: nextNotes || null
@@ -530,13 +742,41 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
     if (entregaError) throw entregaError;
   }
 
-  await get().initialize();
+    await get().initialize();
+  } catch (err) {
+    console.warn('[updateDelivery] falha online — enfileirando', err);
+    await enqueueOp({ type: 'order.update', payload: pedidoUpd, workspaceId: wId!, refFields: ['id'] });
+    if (targetDelivery?.id && !isTempId(targetDelivery.id)) {
+      const deliveryUpdate: any = { id: targetDelivery.id, workspace_id: wId, data: deliveryDate, observacoes: nextNotes || null };
+      if ((order.deliveries || []).length <= 1) {
+        deliveryUpdate.quantidade = totalDel;
+        deliveryUpdate.quantidade_estoque = nextStockEntryQuantity;
+        deliveryUpdate.gerou_entrada_estoque = createStockEntry || order.stockEntryCreated;
+      }
+      await enqueueOp({ type: 'delivery.update', payload: deliveryUpdate, workspaceId: wId!, refFields: ['id'] });
+    }
+    toast.info('Sem conexão — alteração será sincronizada depois');
+  }
 },
 
       finalizeOrder: async (id) => {
+        const wId = useAuthStore.getState().workspaceId;
+        set((s) => ({
+          orders: s.orders.map(o => o.id !== id ? o : ({ ...o, deliveryStatus: 'Entrega Completa' as any }))
+        }) as any);
+
+        if (isOffline() || isTempId(id)) {
+          await enqueueOp({ type: 'order.finalize', payload: { id, workspace_id: wId }, workspaceId: wId!, refFields: ['id'] });
+          return;
+        }
+
         const { supabase } = await import('./supabase');
-        await supabase.from('pedidos').update({ status_entrega: 'Entrega Completa' }).eq('id', id).eq('workspace_id', useAuthStore.getState().workspaceId);
-        await get().initialize();
+        try {
+          await supabase.from('pedidos').update({ status_entrega: 'Entrega Completa' }).eq('id', id).eq('workspace_id', wId);
+          await get().initialize();
+        } catch {
+          await enqueueOp({ type: 'order.finalize', payload: { id, workspace_id: wId }, workspaceId: wId!, refFields: ['id'] });
+        }
       },
 
       addLocation: async (l) => {
@@ -614,6 +854,75 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
 
       pendingMovementsCount: async () => {
         try { const { countPendingMovements } = await import('./idb-queue'); return await countPendingMovements(); } catch { return 0; }
+      },
+
+      pendingOpsCount: async () => {
+        try { return await countOps(); } catch { return 0; }
+      },
+
+      syncPendingOps: async () => {
+        const total = await countOps();
+        if (total === 0) return;
+        const { supabase } = await import('./supabase');
+
+        const exec: Record<OpType, (p: any) => Promise<{ realId?: string } | void>> = {
+          'item.add': async (p) => {
+            const { data, error } = await supabase.from('produtos').insert([p]).select('id').single();
+            if (error) throw error;
+            return { realId: data?.id };
+          },
+          'item.update': async (p) => {
+            const { id, workspace_id, ...rest } = p;
+            const { error } = await supabase.from('produtos').update(rest).eq('id', id).eq('workspace_id', workspace_id);
+            if (error) throw error;
+          },
+          'item.remove': async (p) => {
+            const { error } = await supabase.from('produtos').update({ deleted_at: new Date().toISOString() }).eq('id', p.id).eq('workspace_id', p.workspace_id);
+            if (error) throw error;
+          },
+          'order.add': async (p) => {
+            const { data, error } = await supabase.from('pedidos').insert([p]).select('id').single();
+            if (error) throw error;
+            return { realId: data?.id };
+          },
+          'order.update': async (p) => {
+            const { id, workspace_id, ...rest } = p;
+            const { error } = await supabase.from('pedidos').update(rest).eq('id', id).eq('workspace_id', workspace_id);
+            if (error) throw error;
+          },
+          'order.remove': async (p) => {
+            const { error } = await supabase.from('pedidos').delete().eq('id', p.id).eq('workspace_id', p.workspace_id);
+            if (error) throw error;
+          },
+          'order.finalize': async (p) => {
+            const { error } = await supabase.from('pedidos').update({ status_entrega: 'Entrega Completa' }).eq('id', p.id).eq('workspace_id', p.workspace_id);
+            if (error) throw error;
+          },
+          'delivery.register': async (p) => {
+            const { data, error } = await supabase.from('entregas_pedido').insert([p]).select('id').single();
+            if (error) throw error;
+            return { realId: data?.id };
+          },
+          'delivery.update': async (p) => {
+            const { id, workspace_id, ...rest } = p;
+            const { error } = await supabase.from('entregas_pedido').update(rest).eq('id', id).eq('workspace_id', workspace_id);
+            if (error) throw error;
+          },
+        };
+
+        try {
+          const result = await flushOps(exec);
+          pruneTmpMap();
+          if (result.ok > 0) {
+            toast.success(`${result.ok} operação(ões) sincronizada(s)`);
+            await get().initialize();
+          }
+          if (result.failed > 0) {
+            toast.error(`Falha ao sincronizar — tentaremos novamente`);
+          }
+        } catch (err) {
+          console.error('[syncPendingOps]', err);
+        }
       },
 
       applyBatchMovements: async (moves) => {
