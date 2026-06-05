@@ -92,6 +92,8 @@ export interface StockState {
   removeQrAlias: (k: string) => Promise<void>;
   syncPendingMovements: () => Promise<void>;
   pendingMovementsCount: () => Promise<number>;
+  pendingOpsCount: () => Promise<number>;
+  syncPendingOps: () => Promise<void>;
   applyBatchMovements: (moves: Array<{ categoryId: string; itemId: string; newQ: number; type: 'entrada' | 'saida'; movQ: number; note?: string; orderId?: string }>) => Promise<void>;
   
   // Pagination fetch functions
