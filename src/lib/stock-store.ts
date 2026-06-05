@@ -855,6 +855,75 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
         try { const { countPendingMovements } = await import('./idb-queue'); return await countPendingMovements(); } catch { return 0; }
       },
 
+      pendingOpsCount: async () => {
+        try { return await countOps(); } catch { return 0; }
+      },
+
+      syncPendingOps: async () => {
+        const total = await countOps();
+        if (total === 0) return;
+        const { supabase } = await import('./supabase');
+
+        const exec: Record<OpType, (p: any) => Promise<{ realId?: string } | void>> = {
+          'item.add': async (p) => {
+            const { data, error } = await supabase.from('produtos').insert([p]).select('id').single();
+            if (error) throw error;
+            return { realId: data?.id };
+          },
+          'item.update': async (p) => {
+            const { id, workspace_id, ...rest } = p;
+            const { error } = await supabase.from('produtos').update(rest).eq('id', id).eq('workspace_id', workspace_id);
+            if (error) throw error;
+          },
+          'item.remove': async (p) => {
+            const { error } = await supabase.from('produtos').update({ deleted_at: new Date().toISOString() }).eq('id', p.id).eq('workspace_id', p.workspace_id);
+            if (error) throw error;
+          },
+          'order.add': async (p) => {
+            const { data, error } = await supabase.from('pedidos').insert([p]).select('id').single();
+            if (error) throw error;
+            return { realId: data?.id };
+          },
+          'order.update': async (p) => {
+            const { id, workspace_id, ...rest } = p;
+            const { error } = await supabase.from('pedidos').update(rest).eq('id', id).eq('workspace_id', workspace_id);
+            if (error) throw error;
+          },
+          'order.remove': async (p) => {
+            const { error } = await supabase.from('pedidos').delete().eq('id', p.id).eq('workspace_id', p.workspace_id);
+            if (error) throw error;
+          },
+          'order.finalize': async (p) => {
+            const { error } = await supabase.from('pedidos').update({ status_entrega: 'Entrega Completa' }).eq('id', p.id).eq('workspace_id', p.workspace_id);
+            if (error) throw error;
+          },
+          'delivery.register': async (p) => {
+            const { data, error } = await supabase.from('entregas_pedido').insert([p]).select('id').single();
+            if (error) throw error;
+            return { realId: data?.id };
+          },
+          'delivery.update': async (p) => {
+            const { id, workspace_id, ...rest } = p;
+            const { error } = await supabase.from('entregas_pedido').update(rest).eq('id', id).eq('workspace_id', workspace_id);
+            if (error) throw error;
+          },
+        };
+
+        try {
+          const result = await flushOps(exec);
+          pruneTmpMap();
+          if (result.ok > 0) {
+            toast.success(`${result.ok} operação(ões) sincronizada(s)`);
+            await get().initialize();
+          }
+          if (result.failed > 0) {
+            toast.error(`Falha ao sincronizar — tentaremos novamente`);
+          }
+        } catch (err) {
+          console.error('[syncPendingOps]', err);
+        }
+      },
+
       applyBatchMovements: async (moves) => {
         if (!moves || moves.length === 0) return;
         const { supabase } = await import('./supabase');
