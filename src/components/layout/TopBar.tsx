@@ -16,6 +16,7 @@ import {
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { countPendingMovements } from "@/lib/idb-queue";
+import { countOps } from "@/lib/op-queue";
 
 export function TopBar() {
   const { theme, setTheme } = useTheme();
@@ -40,7 +41,13 @@ export function TopBar() {
     window.addEventListener("online", onUp);
     window.addEventListener("offline", onDown);
     const refresh = async () => {
-      try { setPendingCount(await countPendingMovements()); } catch { /* ignore */ }
+      try {
+        const [m, o] = await Promise.all([
+          countPendingMovements().catch(() => 0),
+          countOps().catch(() => 0),
+        ]);
+        setPendingCount(m + o);
+      } catch { /* ignore */ }
     };
     refresh();
     const id = setInterval(refresh, 5000);
