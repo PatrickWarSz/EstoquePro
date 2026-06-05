@@ -121,6 +121,18 @@ export const useStockStore = create<StockState>()(
           const workspaceId = useAuthStore.getState().workspaceId;
           if (!workspaceId) { set({ loading: false }); return; }
 
+          // OFFLINE: se o dispositivo está sem internet, NÃO bate no Supabase.
+          // O zustand persist já reidratou categorias/pedidos/fornecedores/locations
+          // do disco — usamos isso e tentamos sincronizar quando voltar online.
+          if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            console.warn('[initialize] offline — usando cache local');
+            set({ loading: false });
+            try {
+              window.addEventListener('online', () => { get().initialize(); }, { once: true });
+            } catch (_) {}
+            return;
+          }
+
           // Garante que a sessão do Supabase está válida antes de consultar
           // (RLS retorna 0 linhas sem token — sem erro — e zeraria o estado).
           let { data: { session } } = await supabase.auth.getSession();
