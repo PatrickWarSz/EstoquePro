@@ -147,22 +147,26 @@ export function TopBar() {
       <div className="ml-auto flex items-center gap-1 sm:gap-2">
         {/* Status de conexão / sincronização */}
         {!isOnline ? (
-          <span
-            className="flex items-center gap-1 rounded-full border border-destructive/40 bg-destructive/10 px-2 sm:px-3 py-1 text-xs font-medium text-destructive"
+          <button
+            type="button"
+            onClick={() => setQueueOpen(true)}
+            className="flex items-center gap-1 rounded-full border border-destructive/40 bg-destructive/10 px-2 sm:px-3 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/15"
             title="Sem internet — o app continua funcionando e sincroniza quando conectar"
           >
             <WifiOff className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Offline</span>
             {pendingCount > 0 && <span>· {pendingCount}</span>}
-          </span>
+          </button>
         ) : pendingCount > 0 ? (
-          <span
-            className="flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 sm:px-3 py-1 text-xs font-medium text-warning"
+          <button
+            type="button"
+            onClick={() => setQueueOpen(true)}
+            className="flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 sm:px-3 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/15"
             title={`${pendingCount} operação(ões) sendo sincronizada(s)`}
           >
             <CloudUpload className="h-3.5 w-3.5 animate-pulse" />
             <span>{pendingCount}</span>
-          </span>
+          </button>
         ) : null}
 
         {lowOrZero > 0 && (
@@ -223,6 +227,100 @@ export function TopBar() {
           </DropdownMenu>
         )}
       </div>
+      <Dialog open={queueOpen} onOpenChange={setQueueOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Fila de sincronização</DialogTitle>
+            <DialogDescription>
+              Operações pendentes apenas desta conta. Você pode tentar sincronizar ou cancelar itens com erro.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              className="gap-2"
+              disabled={syncing || pendingCount === 0 || !isOnline}
+              onClick={async () => {
+                setSyncing(true);
+                try {
+                  await useStockStore.getState().syncPendingMovements();
+                  await useStockStore.getState().syncPendingOps(true);
+                  await refreshQueue();
+                } finally {
+                  setSyncing(false);
+                }
+              }}
+            >
+              <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+              Sincronizar agora
+            </Button>
+            <Button size="sm" variant="outline" onClick={refreshQueue}>Atualizar lista</Button>
+          </div>
+          <ScrollArea className="max-h-[55vh] pr-2">
+            <div className="space-y-3 py-1">
+              {movements.length === 0 && ops.length === 0 ? (
+                <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+                  Nenhuma operação pendente para esta conta.
+                </div>
+              ) : null}
+              {ops.map((op) => (
+                <div key={op.id} className="rounded-lg border p-3 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium">{labelOp(op.type)}</div>
+                      <div className="text-xs text-muted-foreground">{new Date(op.createdAt).toLocaleString("pt-BR")}</div>
+                      {op.lastError && <div className="mt-2 rounded-md bg-destructive/10 p-2 text-xs text-destructive">{op.lastError}</div>}
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      title="Cancelar operação pendente"
+                      onClick={async () => { await removeOp(op.id); await refreshQueue(); }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {movements.map((m) => (
+                <div key={m.id} className="rounded-lg border p-3 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium">Movimentação de estoque · {m.type === "entrada" ? "Entrada" : "Saída"}</div>
+                      <div className="text-xs text-muted-foreground">{Number(m.movQ).toLocaleString("pt-BR")} · {new Date(m.date).toLocaleString("pt-BR")}</div>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      title="Cancelar movimentação pendente"
+                      onClick={async () => { await removePendingMovement(m.id); await refreshQueue(); }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </header>
   );
+}
+
+function labelOp(type: QueuedOp["type"]) {
+  const labels: Record<QueuedOp["type"], string> = {
+    "order.add": "Criar pedido",
+    "order.update": "Atualizar pedido",
+    "order.remove": "Remover pedido",
+    "order.finalize": "Finalizar pedido",
+    "delivery.register": "Registrar entrega",
+    "delivery.update": "Atualizar entrega",
+    "item.add": "Criar item",
+    "item.update": "Atualizar item",
+    "item.remove": "Remover item",
+  };
+  return labels[type] || type;
 }
