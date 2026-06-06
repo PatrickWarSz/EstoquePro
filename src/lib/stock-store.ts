@@ -45,7 +45,7 @@ function calcDeliveryStatus(ord: number, del: number): import('./types').OrderDe
 
 function currentQueueScope(): QueueScope {
   const auth = useAuthStore.getState();
-  return { workspaceId: auth.workspaceId, ownerUserId: auth.currentUserId, includeLegacy: false };
+  return { workspaceId: auth.workspaceId, ownerUserId: auth.currentUserId || '__no_user__', includeLegacy: false };
 }
 
 function enqueueOp(op: Omit<QueuedOp, "id" | "createdAt" | "attempts">): Promise<string> {
