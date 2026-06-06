@@ -38,6 +38,19 @@ export async function getAllPendingMovements(): Promise<any[]> {
   } finally { db.close() }
 }
 
+export async function getPendingMovements(scope?: { workspaceId?: string | null; ownerUserId?: string | null; includeLegacy?: boolean }): Promise<any[]> {
+  const all = await getAllPendingMovements()
+  if (!scope) return all
+  return all.filter((item) => {
+    if (scope.workspaceId && item.workspaceId !== scope.workspaceId) return false
+    if (scope.ownerUserId) {
+      if (item.ownerUserId) return item.ownerUserId === scope.ownerUserId
+      return scope.includeLegacy === true
+    }
+    return true
+  })
+}
+
 export async function clearPendingMovements() {
   const db = await openDB()
   try {
@@ -45,6 +58,12 @@ export async function clearPendingMovements() {
     tx.objectStore(STORE).clear()
     await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); })
   } finally { db.close() }
+}
+
+export async function clearPendingMovementsFor(scope?: { workspaceId?: string | null; ownerUserId?: string | null; includeLegacy?: boolean }) {
+  if (!scope) return clearPendingMovements()
+  const items = await getPendingMovements(scope)
+  await Promise.all(items.map((item) => removePendingMovement(item.id)))
 }
 
 export async function removePendingMovement(id: string) {
@@ -63,6 +82,11 @@ export async function countPendingMovements(): Promise<number> {
     const req = tx.objectStore(STORE).count()
     return await new Promise((resolve, reject) => { req.onsuccess = () => resolve(req.result as number); req.onerror = () => reject(req.error); })
   } finally { db.close() }
+}
+
+export async function countPendingMovementsFor(scope?: { workspaceId?: string | null; ownerUserId?: string | null; includeLegacy?: boolean }): Promise<number> {
+  if (!scope) return countPendingMovements()
+  return (await getPendingMovements(scope)).length
 }
 
 // Migrate existing localStorage queue (one-time). Removes localStorage key after migrating.
