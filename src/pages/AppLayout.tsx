@@ -16,7 +16,7 @@ export default function AppLayout() {
   const refreshSubscription = useAuthStore((s) => s.refreshSubscription);
   
   // Pegamos os valores brutos para diagnosticar e controlar a tela
-  const { subscriptionStatus, expiryDate, workspaceId, asaasPortalUrl } = useAuthStore();
+  const { subscriptionStatus, expiryDate, workspaceId, currentUserId, asaasPortalUrl } = useAuthStore();
   
   const location = useLocation();
   const onScanner = location.pathname.startsWith("/app/scanner");
@@ -59,7 +59,7 @@ export default function AppLayout() {
       window.removeEventListener('online', onOnline);
       if (unsub) unsub();
     };
-  }, [workspaceId]);
+  }, [workspaceId, currentUserId]);
 
   // LÓGICA DO KILL SWITCH BLINDADA (Trial e Assinantes)
   const isExpired = () => {
