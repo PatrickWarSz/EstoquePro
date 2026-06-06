@@ -273,15 +273,7 @@ categories = sortedCats.map(cat => ({
             console.warn('[initialize] QR cache error (não crítico):', err);
           }
 
-          // Register online handler to attempt sync when connection is restored
-          try {
-            window.addEventListener('online', () => { get().syncPendingMovements(); get().syncPendingOps(); });
-            // Also refresh pending count / attempt sync now if online
-            if (typeof navigator !== 'undefined' && navigator.onLine) {
-              get().syncPendingMovements();
-              get().syncPendingOps();
-            }
-          } catch (_) {}
+          // Sincronização de filas fica centralizada no AppLayout/modal para evitar tentativas duplicadas.
         } catch { set({ loading: false }); }
       },
 
