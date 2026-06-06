@@ -243,8 +243,8 @@ export function TopBar() {
               onClick={async () => {
                 setSyncing(true);
                 try {
-                  await useStockStore.getState().syncPendingMovements();
                   await useStockStore.getState().syncPendingOps(true);
+                  await useStockStore.getState().syncPendingMovements();
                   await refreshQueue();
                 } finally {
                   setSyncing(false);
