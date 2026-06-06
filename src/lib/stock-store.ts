@@ -833,14 +833,21 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
         const { supabase } = await import('./supabase');
         try {
           console.log(`[syncPendingMovements] Sincronizando ${list.length} movimentações...`);
-          const inserts = list.map(l => ({ workspace_id: l.workspaceId, produto_id: l.itemId, tipo: l.type, quantidade: l.movQ, novo_total: l.newQ, observacao: l.note || '', pedido_id: l.orderId ? (resolveTempId(l.orderId) || null) : null, operador_id: l.operatorId || null, nome_operador: l.operatorName || 'Sistema', data: l.date }));
+          const inserts = list.map(l => {
+            const productId = isTempId(l.itemId) ? resolveTempId(l.itemId) : l.itemId;
+            const orderId = l.orderId ? (isTempId(l.orderId) ? resolveTempId(l.orderId) : l.orderId) : null;
+            if (!productId) throw new Error('Movimentação aguardando item offline sincronizar primeiro');
+            if (l.orderId && !orderId) throw new Error('Movimentação aguardando pedido offline sincronizar primeiro');
+            return { workspace_id: l.workspaceId, produto_id: productId, tipo: l.type, quantidade: l.movQ, novo_total: l.newQ, observacao: l.note || '', pedido_id: orderId, operador_id: l.operatorId || null, nome_operador: l.operatorName || 'Sistema', data: l.date };
+          });
           const { error: insErr } = await supabase.from('movimentacoes').insert(inserts);
           if (insErr) throw new Error(`Falha ao inserir movimentações: ${insErr.message}`);
           
           // Update product quantities in parallel
           const updateErrors: any[] = [];
           await Promise.all(list.map(async (l) => {
-            const { error: upErr } = await supabase.from('produtos').update({ quantidade: l.newQ }).eq('id', l.itemId).eq('workspace_id', l.workspaceId);
+            const productId = isTempId(l.itemId) ? resolveTempId(l.itemId) : l.itemId;
+            const { error: upErr } = await supabase.from('produtos').update({ quantidade: l.newQ }).eq('id', productId).eq('workspace_id', l.workspaceId);
             if (upErr) updateErrors.push({ item: l.itemId, error: upErr.message });
           }));
           
