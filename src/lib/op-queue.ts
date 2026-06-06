@@ -70,11 +70,16 @@ function genId() {
 }
 
 export function genTempId(prefix = "tmp"): string {
-  return `${prefix}_${genId()}`;
+  return `tmp_${prefix}_${genId()}`;
 }
 
 export function isTempId(id: unknown): boolean {
-  return typeof id === "string" && id.startsWith("tmp_");
+  return typeof id === "string" && (
+    id.startsWith("tmp_") ||
+    id.startsWith("order_") ||
+    id.startsWith("item_") ||
+    id.startsWith("delivery_")
+  );
 }
 
 function loadTmpMap(): Record<string, string> {
