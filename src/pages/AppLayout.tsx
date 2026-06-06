@@ -25,7 +25,14 @@ export default function AppLayout() {
   useEffect(() => {
     if (!workspaceId) return;
 
-    initialize();
+    (async () => {
+      await initialize();
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        try { await useStockStore.getState().syncPendingOps(); } catch (_) {}
+        try { await useStockStore.getState().syncPendingMovements(); } catch (_) {}
+        await initialize();
+      }
+    })();
     fetchEmployees();
     if (typeof refreshSubscription === 'function') refreshSubscription();
 
