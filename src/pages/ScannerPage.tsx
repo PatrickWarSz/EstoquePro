@@ -99,7 +99,7 @@ export default function ScannerPage() {
   const refreshPendingCount = async () => {
     try {
       const { countPendingMovementsFor } = await import('@/lib/idb-queue')
-      const n = await countPendingMovementsFor({ workspaceId, ownerUserId: currentUserId, includeLegacy: false })
+      const n = await countPendingMovementsFor({ workspaceId, ownerUserId: currentUserId || "__no_user__", includeLegacy: false })
       setPendingCount(n)
     } catch {
       setPendingCount(0)
