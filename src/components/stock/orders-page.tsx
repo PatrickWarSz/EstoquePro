@@ -105,6 +105,13 @@ function deadlineBadge(status: Order["deadlineStatus"]) {
         Atrasado
       </Badge>
     )
+  if (status === "Entregue com Atraso")
+    return (
+      <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-destructive gap-1">
+        <AlertTriangle className="h-3 w-3" />
+        Entregue com Atraso
+      </Badge>
+    )
   return (
     <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning gap-1">
       <Clock className="h-3 w-3" />
