@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 import type { Category, StockItem, HistoryEntry, Supplier, Order, OrderDeliveryEntry, StockLocation } from './types'
 import { useAuthStore } from './auth-store'
 import { toast } from "sonner"
-import { enqueueOp as enqueueRawOp, flushOps, countOps, genTempId, isTempId, pruneTmpMap, type OpType, type QueuedOp, type QueueScope } from './op-queue'
+import { enqueueOp as enqueueRawOp, flushOps, countOps, genTempId, isTempId, pruneTmpMap, resolveTempId, type OpType, type QueuedOp, type QueueScope } from './op-queue'
 
 export type QrAlias = { kind: 'item'; categoryId: string; itemId: string } | { kind: 'location'; locationId: string }
 
@@ -375,7 +375,7 @@ categories = sortedCats.map(cat => ({
         // If offline, enqueue the movement and update local state immediately
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
           const { enqueuePendingMovementWithRetry } = await import('./idb-queue');
-          const ok = await enqueuePendingMovementWithRetry({ id: generateId(), workspaceId: wId, categoryId: catId, itemId, type, movQ, newQ, note, orderId: orderId || null, operatorId: op.id || null, operatorName: op.name || 'Sistema', date: new Date().toISOString() });
+          const ok = await enqueuePendingMovementWithRetry({ id: generateId(), workspaceId: wId, ownerUserId: useAuthStore.getState().currentUserId, categoryId: catId, itemId, type, movQ, newQ, note, orderId: orderId || null, operatorId: op.id || null, operatorName: op.name || 'Sistema', date: new Date().toISOString() });
           if (!ok) { toast.error('Falha ao enfileirar movimento'); return; }
 
           // Update local categories to reflect new quantity immediately for UX
@@ -830,13 +830,14 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
       },
 
       syncPendingMovements: async () => {
-        const { getAllPendingMovements, clearPendingMovements } = await import('./idb-queue');
-        const list = await getAllPendingMovements();
+        const { getPendingMovements, clearPendingMovementsFor } = await import('./idb-queue');
+        const scope = currentQueueScope();
+        const list = await getPendingMovements(scope);
         if (!list || list.length === 0) return;
         const { supabase } = await import('./supabase');
         try {
           console.log(`[syncPendingMovements] Sincronizando ${list.length} movimentações...`);
-          const inserts = list.map(l => ({ workspace_id: l.workspaceId, produto_id: l.itemId, tipo: l.type, quantidade: l.movQ, novo_total: l.newQ, observacao: l.note || '', pedido_id: l.orderId || null, operador_id: l.operatorId || null, nome_operador: l.operatorName || 'Sistema', data: l.date }));
+          const inserts = list.map(l => ({ workspace_id: l.workspaceId, produto_id: l.itemId, tipo: l.type, quantidade: l.movQ, novo_total: l.newQ, observacao: l.note || '', pedido_id: l.orderId ? (resolveTempId(l.orderId) || null) : null, operador_id: l.operatorId || null, nome_operador: l.operatorName || 'Sistema', data: l.date }));
           const { error: insErr } = await supabase.from('movimentacoes').insert(inserts);
           if (insErr) throw new Error(`Falha ao inserir movimentações: ${insErr.message}`);
           
@@ -851,7 +852,7 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
             console.warn('[syncPendingMovements] Alguns updates falharam:', updateErrors);
           }
           
-          await clearPendingMovements();
+          await clearPendingMovementsFor(scope);
           await get().initialize();
           console.log(`[syncPendingMovements] ✓ ${list.length} movimentação(ões) sincronizada(s) com sucesso`);
           toast.success(`${list.length} movimentação(ões) sincronizada(s)`);
@@ -862,15 +863,16 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
       },
 
       pendingMovementsCount: async () => {
-        try { const { countPendingMovements } = await import('./idb-queue'); return await countPendingMovements(); } catch { return 0; }
+        try { const { countPendingMovementsFor } = await import('./idb-queue'); return await countPendingMovementsFor(currentQueueScope()); } catch { return 0; }
       },
 
       pendingOpsCount: async () => {
-        try { return await countOps(); } catch { return 0; }
+        try { return await countOps(currentQueueScope()); } catch { return 0; }
       },
 
-      syncPendingOps: async () => {
-        const total = await countOps();
+      syncPendingOps: async (manual = false) => {
+        const scope = currentQueueScope();
+        const total = await countOps(scope);
         if (total === 0) return;
         const { supabase } = await import('./supabase');
 
@@ -920,13 +922,13 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
         };
 
         try {
-          const result = await flushOps(exec);
+          const result = await flushOps(exec, scope);
           pruneTmpMap();
           if (result.ok > 0) {
             toast.success(`${result.ok} operação(ões) sincronizada(s)`);
             await get().initialize();
           }
-          if (result.failed > 0) {
+          if (result.failed > 0 && manual) {
             toast.error(`Falha ao sincronizar — tentaremos novamente`);
           }
         } catch (err) {
@@ -955,7 +957,7 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
           const { enqueuePendingMovementWithRetry } = await import('./idb-queue');
           const failedEnqueues: string[] = [];
           await Promise.all(moves.map(async (m) => {
-            const ok = await enqueuePendingMovementWithRetry({ id: generateId(), workspaceId: useAuthStore.getState().workspaceId, categoryId: m.categoryId, itemId: m.itemId, type: m.type, movQ: m.movQ, newQ: m.newQ, note: m.note || '', orderId: m.orderId || null, operadorId: getCurrentOperator().id || null, operatorName: getCurrentOperator().name || 'Sistema', date: new Date().toISOString() });
+            const ok = await enqueuePendingMovementWithRetry({ id: generateId(), workspaceId: useAuthStore.getState().workspaceId, ownerUserId: useAuthStore.getState().currentUserId, categoryId: m.categoryId, itemId: m.itemId, type: m.type, movQ: m.movQ, newQ: m.newQ, note: m.note || '', orderId: m.orderId || null, operadorId: getCurrentOperator().id || null, operatorName: getCurrentOperator().name || 'Sistema', date: new Date().toISOString() });
             if (!ok) failedEnqueues.push(m.itemId);
           }));
           if (failedEnqueues.length > 0) console.error('[applyBatchMovements] Falha ao enfileirar alguns itens:', failedEnqueues);
