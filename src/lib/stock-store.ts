@@ -655,7 +655,7 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
         const pedidoUpdatePayload: any = { id: orderId, workspace_id: wId, quantidade_entregue: totalDel, status_prazo: newDeadline, status_entrega: newDelivery, entrada_estoque_criada: newStockCreatedFlag };
 
         const enqueueDeliveryOps = async () => {
-          await enqueueOp({ type: 'delivery.register', payload: entregaPayload, workspaceId: wId!, refFields: ['pedido_id'] });
+          await enqueueOp({ type: 'delivery.register', payload: entregaPayload, workspaceId: wId!, createsTempId: localDeliveryId, refFields: ['pedido_id'] });
           await enqueueOp({ type: 'order.update', payload: pedidoUpdatePayload, workspaceId: wId!, refFields: ['id'] });
         };
 
@@ -727,10 +727,7 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
         deliveryUpdate.quantidade_estoque = nextStockEntryQuantity;
         deliveryUpdate.gerou_entrada_estoque = createStockEntry || order.stockEntryCreated;
       }
-      // Se a entrega ainda nem subiu (tmp_), só ignoramos — quando ela subir, irá com os valores atuais.
-      if (!isTempId(targetDelivery.id)) {
-        await enqueueOp({ type: 'delivery.update', payload: deliveryUpdate, workspaceId: wId!, refFields: ['id'] });
-      }
+      await enqueueOp({ type: 'delivery.update', payload: deliveryUpdate, workspaceId: wId!, refFields: ['id'] });
     }
     return;
   }
