@@ -38,6 +38,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useStockStore } from "@/lib/stock-store"
+import { useAuthStore } from "@/lib/auth-store"
 import { parseQr, qrKey } from "@/lib/qr"
 import { beep } from "@/lib/beep"
 import type { StockItem } from "@/lib/types"
@@ -92,11 +93,13 @@ export default function ScannerPage() {
 
   const [pendingCount, setPendingCount] = useState<number>(0)
   const [syncing, setSyncing] = useState(false)
+  const workspaceId = useAuthStore((s) => s.workspaceId)
+  const currentUserId = useAuthStore((s) => s.currentUserId)
 
   const refreshPendingCount = async () => {
     try {
-      const { countPendingMovements } = await import('@/lib/idb-queue')
-      const n = await countPendingMovements()
+      const { countPendingMovementsFor } = await import('@/lib/idb-queue')
+      const n = await countPendingMovementsFor({ workspaceId, ownerUserId: currentUserId, includeLegacy: false })
       setPendingCount(n)
     } catch {
       setPendingCount(0)
