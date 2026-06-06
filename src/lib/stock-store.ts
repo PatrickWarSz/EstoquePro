@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 import type { Category, StockItem, HistoryEntry, Supplier, Order, OrderDeliveryEntry, StockLocation } from './types'
 import { useAuthStore } from './auth-store'
 import { toast } from "sonner"
-import { enqueueOp, flushOps, countOps, genTempId, isTempId, pruneTmpMap, type OpType } from './op-queue'
+import { enqueueOp as enqueueRawOp, flushOps, countOps, genTempId, isTempId, pruneTmpMap, type OpType, type QueuedOp, type QueueScope } from './op-queue'
 
 export type QrAlias = { kind: 'item'; categoryId: string; itemId: string } | { kind: 'location'; locationId: string }
 
@@ -41,6 +41,15 @@ function calcDeliveryStatus(ord: number, del: number): import('./types').OrderDe
   if (del <= 0) return 'Entrega Incompleta'
   if (del < ord) return 'Entrega Incompleta'
   return del > ord ? 'Entrega Excedente' : 'Entrega Completa'
+}
+
+function currentQueueScope(): QueueScope {
+  const auth = useAuthStore.getState();
+  return { workspaceId: auth.workspaceId, ownerUserId: auth.currentUserId, includeLegacy: true };
+}
+
+function enqueueOp(op: Omit<QueuedOp, "id" | "createdAt" | "attempts">): Promise<string> {
+  return enqueueRawOp({ ...op, ownerUserId: useAuthStore.getState().currentUserId });
 }
 
 // --- CONTRATO DO SISTEMA (INTERFACE) ---
@@ -93,7 +102,7 @@ export interface StockState {
   syncPendingMovements: () => Promise<void>;
   pendingMovementsCount: () => Promise<number>;
   pendingOpsCount: () => Promise<number>;
-  syncPendingOps: () => Promise<void>;
+  syncPendingOps: (manual?: boolean) => Promise<void>;
   applyBatchMovements: (moves: Array<{ categoryId: string; itemId: string; newQ: number; type: 'entrada' | 'saida'; movQ: number; note?: string; orderId?: string }>) => Promise<void>;
   
   // Pagination fetch functions
