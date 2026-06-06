@@ -189,6 +189,8 @@ supabase.from('produtos').select('*').eq('workspace_id', workspaceId).is('delete
 
          const orders = (pedRes.data ||[]).map(p => {
              const ents = (entRes.data ||[]).filter(e => e.pedido_id === p.id).map(e => ({ id: e.id, date: e.data, quantity: Number(e.quantidade), stockEntryQuantity: Number(e.quantidade_estoque), notes: e.observacoes, createStockEntry: e.gerou_entrada_estoque })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+             const latestDeliveryDate = ents.length > 0 ? ents[0].date : undefined;
+             const deadlineStatus = calcDeadlineStatus(p.data_esperada, latestDeliveryDate);
              return { 
                id: p.id, 
                supplierId: p.fornecedor_id, 
@@ -198,8 +200,8 @@ supabase.from('produtos').select('*').eq('workspace_id', workspaceId).is('delete
                quantityOrdered: Number(p.quantidade_pedida), 
                quantityDelivered: Number(p.quantidade_entregue), 
                expectedDate: p.data_esperada, 
-               deliveryDate: ents.length > 0 ? ents[0].date : undefined, 
-               deadlineStatus: p.status_prazo as any, 
+                deliveryDate: latestDeliveryDate, 
+                deadlineStatus, 
                deliveryStatus: p.status_entrega as any, 
                notes: p.observacoes, 
                stockEntryCreated: p.entrada_estoque_criada, 
