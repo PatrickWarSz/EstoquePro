@@ -675,11 +675,7 @@ function CreateOrderDialog({
       stockEntryQuantity: e?.stockEntryQuantity,
       unit: unit.trim(),
       pricePerUnit: Number(pricePerUnit),
-      deadlineStatus: expectedDate
-        ? new Date() > new Date(expectedDate)
-          ? "Pedido Atrasado"
-          : "Dentro do Prazo"
-        : "Dentro do Prazo",
+      deadlineStatus: getDeadlineStatus(expectedDate ? dateInputToIso(expectedDate) : undefined, e?.deliveryDate),
       deliveryStatus: e?.deliveryStatus || "Entrega Incompleta",
       notes: notes.trim(),
       stockEntryCreated: e?.stockEntryCreated || false,
