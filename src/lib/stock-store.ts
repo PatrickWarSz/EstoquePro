@@ -61,6 +61,8 @@ export interface StockState {
   locations: StockLocation[];
   loading: boolean;
   clientId: string | null;
+  cacheWorkspaceId?: string | null;
+  cacheUserId?: string | null;
   qrAliases: Record<string, QrAlias>;
   
   // Pagination state for large lists
@@ -120,6 +122,8 @@ export const useStockStore = create<StockState>()(
       locations: [],
       loading: false,
       clientId: 'local-user',
+      cacheWorkspaceId: null,
+      cacheUserId: null,
       qrAliases: {},
       
       // Pagination state
@@ -135,12 +139,17 @@ export const useStockStore = create<StockState>()(
         try {
           const { supabase } = await import('./supabase');
           const workspaceId = useAuthStore.getState().workspaceId;
+          const currentUserId = useAuthStore.getState().currentUserId;
           if (!workspaceId) { set({ loading: false }); return; }
 
           // OFFLINE: se o dispositivo está sem internet, NÃO bate no Supabase.
           // O zustand persist já reidratou categorias/pedidos/fornecedores/locations
           // do disco — usamos isso e tentamos sincronizar quando voltar online.
           if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            if (get().cacheWorkspaceId !== workspaceId || get().cacheUserId !== currentUserId) {
+              set({ categories: [], suppliers: [], orders: [], locations: [], qrAliases: {}, selectedCategoryId: null, loading: false, cacheWorkspaceId: workspaceId, cacheUserId: currentUserId });
+              return;
+            }
             console.warn('[initialize] offline — usando cache local');
             set({ loading: false });
             try {
@@ -247,6 +256,8 @@ categories = sortedCats.map(cat => ({
             qrAliases, 
             selectedCategoryId: nextSelected, 
             loading: false,
+            cacheWorkspaceId: workspaceId,
+            cacheUserId: currentUserId,
             suppliersCursor: supRes.data && supRes.data.length > 0 ? supRes.data[supRes.data.length - 1].criado_em : null,
             suppliersHasMore: (supRes.data || []).length === 30,
             ordersCursor: pedRes.data && pedRes.data.length > 0 ? pedRes.data[pedRes.data.length - 1].criado_em : null,
@@ -1160,7 +1171,9 @@ fetchMoreHistory: async (itemId?: string) => {
         locations: state.locations,   // Locais (Scanner de Prateleiras)
         qrAliases: state.qrAliases,   // Links dos QR Codes
         suppliers: state.suppliers,   // Fornecedores (offline)
-        orders: state.orders          // Pedidos (offline)
+        orders: state.orders,         // Pedidos (offline)
+        cacheWorkspaceId: state.cacheWorkspaceId,
+        cacheUserId: state.cacheUserId
       })
     }
   )
