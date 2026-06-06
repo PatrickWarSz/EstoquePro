@@ -16,7 +16,7 @@ export default function AppLayout() {
   const refreshSubscription = useAuthStore((s) => s.refreshSubscription);
   
   // Pegamos os valores brutos para diagnosticar e controlar a tela
-  const { subscriptionStatus, expiryDate, workspaceId, asaasPortalUrl } = useAuthStore();
+  const { subscriptionStatus, expiryDate, workspaceId, currentUserId, asaasPortalUrl } = useAuthStore();
   
   const location = useLocation();
   const onScanner = location.pathname.startsWith("/app/scanner");
@@ -25,7 +25,14 @@ export default function AppLayout() {
   useEffect(() => {
     if (!workspaceId) return;
 
-    initialize();
+    (async () => {
+      await initialize();
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        try { await useStockStore.getState().syncPendingOps(); } catch (_) {}
+        try { await useStockStore.getState().syncPendingMovements(); } catch (_) {}
+        await initialize();
+      }
+    })();
     fetchEmployees();
     if (typeof refreshSubscription === 'function') refreshSubscription();
 
@@ -35,10 +42,10 @@ export default function AppLayout() {
     }, 30000);
 
     // Quando a conexão voltar, reidrata do servidor e tenta sincronizar a fila
-    const onOnline = () => {
+    const onOnline = async () => {
+      try { await useStockStore.getState().syncPendingOps(); } catch (_) {}
+      try { await useStockStore.getState().syncPendingMovements(); } catch (_) {}
       initialize();
-      try { useStockStore.getState().syncPendingMovements(); } catch (_) {}
-      try { useStockStore.getState().syncPendingOps(); } catch (_) {}
     };
     window.addEventListener('online', onOnline);
 
@@ -59,7 +66,7 @@ export default function AppLayout() {
       window.removeEventListener('online', onOnline);
       if (unsub) unsub();
     };
-  }, [workspaceId]);
+  }, [workspaceId, currentUserId]);
 
   // LÓGICA DO KILL SWITCH BLINDADA (Trial e Assinantes)
   const isExpired = () => {

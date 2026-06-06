@@ -27,11 +27,28 @@ export interface QueuedOp {
   type: OpType;
   payload: any;
   workspaceId: string;
+  ownerUserId?: string | null;
   createdAt: string;
   createsTempId?: string; // tmp_ id this op produces (if any)
   refFields?: string[];   // payload keys that may hold a tmp_ id
   attempts: number;
   lastError?: string;
+}
+
+export interface QueueScope {
+  workspaceId?: string | null;
+  ownerUserId?: string | null;
+  includeLegacy?: boolean;
+}
+
+function matchesScope(op: QueuedOp, scope?: QueueScope): boolean {
+  if (!scope) return true;
+  if (scope.workspaceId && op.workspaceId !== scope.workspaceId) return false;
+  if (scope.ownerUserId) {
+    if (op.ownerUserId) return op.ownerUserId === scope.ownerUserId;
+    return scope.includeLegacy === true;
+  }
+  return true;
 }
 
 function openDB(): Promise<IDBDatabase> {
@@ -53,11 +70,16 @@ function genId() {
 }
 
 export function genTempId(prefix = "tmp"): string {
-  return `${prefix}_${genId()}`;
+  return `tmp_${prefix}_${genId()}`;
 }
 
 export function isTempId(id: unknown): boolean {
-  return typeof id === "string" && id.startsWith("tmp_");
+  return typeof id === "string" && (
+    id.startsWith("tmp_") ||
+    id.startsWith("order_") ||
+    id.startsWith("item_") ||
+    id.startsWith("delivery_")
+  );
 }
 
 function loadTmpMap(): Record<string, string> {
@@ -106,13 +128,13 @@ export async function enqueueOp(
   return full.id;
 }
 
-export async function listOps(): Promise<QueuedOp[]> {
+export async function listOps(scope?: QueueScope): Promise<QueuedOp[]> {
   const db = await openDB();
   try {
     const tx = db.transaction(STORE, "readonly");
     const req = tx.objectStore(STORE).getAll();
     return await new Promise<QueuedOp[]>((res, rej) => {
-      req.onsuccess = () => res((req.result as QueuedOp[]) || []);
+      req.onsuccess = () => res(((req.result as QueuedOp[]) || []).filter((op) => matchesScope(op, scope)));
       req.onerror = () => rej(req.error);
     });
   } finally {
@@ -148,8 +170,9 @@ export async function updateOp(op: QueuedOp) {
   }
 }
 
-export async function countOps(): Promise<number> {
+export async function countOps(scope?: QueueScope): Promise<number> {
   try {
+    if (scope) return (await listOps(scope)).length;
     const db = await openDB();
     try {
       const tx = db.transaction(STORE, "readonly");
@@ -192,8 +215,9 @@ export async function flushOps(
     OpType,
     (payload: any) => Promise<{ realId?: string } | void>
   >,
+  scope?: QueueScope,
 ): Promise<{ ok: number; failed: number; remaining: number }> {
-  const ops = (await listOps()).sort(
+  const ops = (await listOps(scope)).sort(
     (a, b) => a.createdAt.localeCompare(b.createdAt),
   );
   let ok = 0;
@@ -221,7 +245,7 @@ export async function flushOps(
       break;
     }
   }
-  const remaining = await countOps();
+  const remaining = await countOps(scope);
   return { ok, failed, remaining };
 }
 
