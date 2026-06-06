@@ -1,4 +1,4 @@
-import { Search, Moon, Sun, AlertTriangle, LogOut, User as UserIcon, Shield, ArrowLeft, Wifi, WifiOff, CloudUpload } from "lucide-react";
+import { Search, Moon, Sun, AlertTriangle, LogOut, User as UserIcon, Shield, ArrowLeft, WifiOff, CloudUpload, RefreshCw, Trash2 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { countPendingMovements } from "@/lib/idb-queue";
-import { countOps } from "@/lib/op-queue";
+import { countPendingMovementsFor, getPendingMovements, removePendingMovement } from "@/lib/idb-queue";
+import { countOps, listOps, removeOp, type QueuedOp } from "@/lib/op-queue";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function TopBar() {
   const { theme, setTheme } = useTheme();
@@ -28,6 +30,11 @@ export function TopBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [query, setQuery] = useState("");
+  const workspaceId = useAuthStore((s) => s.workspaceId);
+  const [queueOpen, setQueueOpen] = useState(false);
+  const [ops, setOps] = useState<QueuedOp[]>([]);
+  const [movements, setMovements] = useState<any[]>([]);
+  const [syncing, setSyncing] = useState(false);
 
   // Status online/offline + contagem de operações pendentes na fila
   const [isOnline, setIsOnline] = useState<boolean>(
@@ -42,9 +49,10 @@ export function TopBar() {
     window.addEventListener("offline", onDown);
     const refresh = async () => {
       try {
+        const scope = { workspaceId, ownerUserId: currentUserId, includeLegacy: false };
         const [m, o] = await Promise.all([
-          countPendingMovements().catch(() => 0),
-          countOps().catch(() => 0),
+          countPendingMovementsFor(scope).catch(() => 0),
+          countOps(scope).catch(() => 0),
         ]);
         setPendingCount(m + o);
       } catch { /* ignore */ }
@@ -56,7 +64,22 @@ export function TopBar() {
       window.removeEventListener("offline", onDown);
       clearInterval(id);
     };
-  }, []);
+  }, [workspaceId, currentUserId]);
+
+  const refreshQueue = async () => {
+    const scope = { workspaceId, ownerUserId: currentUserId, includeLegacy: false };
+    const [nextMovements, nextOps] = await Promise.all([
+      getPendingMovements(scope).catch(() => []),
+      listOps(scope).catch(() => []),
+    ]);
+    setMovements(nextMovements);
+    setOps(nextOps.sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+    setPendingCount(nextMovements.length + nextOps.length);
+  };
+
+  useEffect(() => {
+    if (queueOpen) refreshQueue();
+  }, [queueOpen, workspaceId, currentUserId]);
 
   const lowOrZero = useMemo(() => {
     let n = 0;
