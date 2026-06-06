@@ -583,10 +583,15 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
         if (up.linkedItemId !== undefined)       dbUp.produto_id         = up.linkedItemId;
         if (up.supplierId !== undefined)         dbUp.fornecedor_id      = up.supplierId;
         const wId = useAuthStore.getState().workspaceId;
+        const existingOrder = get().orders.find(o => o.id === id);
+        const nextDeadlineStatus = existingOrder
+          ? calcDeadlineStatus(up.expectedDate ?? existingOrder.expectedDate, up.deliveryDate ?? existingOrder.deliveryDate)
+          : undefined;
+        if (nextDeadlineStatus) dbUp.status_prazo = nextDeadlineStatus;
 
         // Otimista local
         set((state) => ({
-          orders: state.orders.map(o => o.id !== id ? o : ({ ...o, ...up }))
+          orders: state.orders.map(o => o.id !== id ? o : ({ ...o, ...up, deadlineStatus: nextDeadlineStatus ?? o.deadlineStatus }))
         }) as any);
 
         if (isOffline() || isTempId(id)) {
