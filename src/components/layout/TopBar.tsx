@@ -49,7 +49,7 @@ export function TopBar() {
     window.addEventListener("offline", onDown);
     const refresh = async () => {
       try {
-        const scope = { workspaceId, ownerUserId: currentUserId, includeLegacy: false };
+        const scope = { workspaceId, ownerUserId: currentUserId || "__no_user__", includeLegacy: false };
         const [m, o] = await Promise.all([
           countPendingMovementsFor(scope).catch(() => 0),
           countOps(scope).catch(() => 0),
@@ -67,7 +67,7 @@ export function TopBar() {
   }, [workspaceId, currentUserId]);
 
   const refreshQueue = async () => {
-    const scope = { workspaceId, ownerUserId: currentUserId, includeLegacy: false };
+    const scope = { workspaceId, ownerUserId: currentUserId || "__no_user__", includeLegacy: false };
     const [nextMovements, nextOps] = await Promise.all([
       getPendingMovements(scope).catch(() => []),
       listOps(scope).catch(() => []),
