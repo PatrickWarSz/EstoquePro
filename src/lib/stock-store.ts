@@ -1044,6 +1044,8 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
             notes: e.observacoes, 
             createStockEntry: e.gerou_entrada_estoque 
           })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          const latestDeliveryDate = ents.length > 0 ? ents[0].date : undefined;
+          const deadlineStatus = calcDeadlineStatus(p.data_esperada, latestDeliveryDate);
           return { 
             id: p.id, 
             supplierId: p.fornecedor_id, 
@@ -1053,8 +1055,8 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
             quantityOrdered: Number(p.quantidade_pedida), 
             quantityDelivered: Number(p.quantidade_entregue), 
             expectedDate: p.data_esperada, 
-            deliveryDate: ents.length > 0 ? ents[0].date : undefined, 
-            deadlineStatus: p.status_prazo as any, 
+            deliveryDate: latestDeliveryDate, 
+            deadlineStatus, 
             deliveryStatus: p.status_entrega as any, 
             notes: p.observacoes, 
             stockEntryCreated: p.entrada_estoque_criada, 
