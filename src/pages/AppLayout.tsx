@@ -35,10 +35,10 @@ export default function AppLayout() {
     }, 30000);
 
     // Quando a conexão voltar, reidrata do servidor e tenta sincronizar a fila
-    const onOnline = () => {
+    const onOnline = async () => {
+      try { await useStockStore.getState().syncPendingOps(); } catch (_) {}
+      try { await useStockStore.getState().syncPendingMovements(); } catch (_) {}
       initialize();
-      try { useStockStore.getState().syncPendingMovements(); } catch (_) {}
-      try { useStockStore.getState().syncPendingOps(); } catch (_) {}
     };
     window.addEventListener('online', onOnline);
 
