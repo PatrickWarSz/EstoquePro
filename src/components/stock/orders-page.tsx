@@ -76,6 +76,14 @@ function dateInputToIso(date: string) {
   return `${date}T12:00:00.000Z`
 }
 
+function getDeadlineStatus(expectedDate?: string, deliveryDate?: string): Order["deadlineStatus"] {
+  const expected = expectedDate ? String(expectedDate).slice(0, 10) : ""
+  const delivered = deliveryDate ? String(deliveryDate).slice(0, 10) : ""
+  if (expected && delivered) return delivered <= expected ? "Entregue no Prazo" : "Entregue com Atraso"
+  if (!expected) return "Dentro do Prazo"
+  return todayDateInputValue() > expected ? "Pedido Atrasado" : "Dentro do Prazo"
+}
+
 function fmtCurrency(val: number) {
   return val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
@@ -149,7 +157,7 @@ export function OrdersPage() {
   // ── stats ──────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     const total = orders.length
-    const late = orders.filter((o) => o.deadlineStatus === "Pedido Atrasado").length
+    const late = orders.filter((o) => o.deliveryStatus === "Entrega Incompleta" && getDeadlineStatus(o.expectedDate, o.deliveryDate) === "Pedido Atrasado").length
     const pending = orders.filter((o) => o.deliveryStatus === "Entrega Incompleta").length
     const done = orders.filter((o) => o.deliveryStatus === "Entrega Completa" || o.deliveryStatus === "Entrega Excedente").length
     return { total, late, pending, done }
@@ -161,7 +169,8 @@ export function OrdersPage() {
       .filter((o) => {
         if (filterSupplier !== "all" && o.supplierId !== filterSupplier) return false
         if (filterStatus === "pending" && o.deliveryStatus !== "Entrega Incompleta") return false
-        if (filterStatus === "late" && o.deadlineStatus !== "Pedido Atrasado") return false
+        const deadlineStatus = getDeadlineStatus(o.expectedDate, o.deliveryDate)
+        if (filterStatus === "late" && (o.deliveryStatus !== "Entrega Incompleta" || deadlineStatus !== "Pedido Atrasado")) return false
         if (filterStatus === "done" && o.deliveryStatus === "Entrega Incompleta") return false
         if (search) {
           const q = search.toLowerCase()
@@ -285,6 +294,7 @@ export function OrdersPage() {
                 ?.items.find((i) => i.id === order.linkedItemId)?.unit ||
               "kg"
             const toDeliver = quantityOrdered - quantityDelivered
+            const deadlineStatus = getDeadlineStatus(order.expectedDate, order.deliveryDate)
             const totalValue =
               quantityDelivered * pricePerUnit ||
               quantityOrdered * pricePerUnit
@@ -300,7 +310,7 @@ export function OrdersPage() {
                 key={order.id}
                 className={cn(
                   "p-4 py-3 transition-colors",
-                  order.deadlineStatus === "Pedido Atrasado" &&
+                  deadlineStatus === "Pedido Atrasado" &&
                     order.deliveryStatus === "Entrega Incompleta" &&
                     "border-destructive/30 bg-destructive/[0.02]"
                 )}
@@ -312,7 +322,7 @@ export function OrdersPage() {
                       <span className="font-semibold text-sm truncate">
                         {order.productDescription}
                       </span>
-                      {deadlineBadge(order.deadlineStatus)}
+                      {deadlineBadge(deadlineStatus)}
                       {deliveryBadge(order.deliveryStatus)}
                       {order.stockEntryCreated && (
                         <Badge variant="outline" className="border-success/30 bg-success/10 text-success text-xs gap-1">
