@@ -925,7 +925,7 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
           const result = await flushOps(exec, scope);
           pruneTmpMap();
           if (result.ok > 0) {
-            toast.success(`${result.ok} operação(ões) sincronizada(s)`);
+            if (manual) toast.success(`${result.ok} operação(ões) sincronizada(s)`);
             await get().initialize();
           }
           if (result.failed > 0 && manual) {
