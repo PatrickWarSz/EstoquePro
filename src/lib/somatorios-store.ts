@@ -66,22 +66,6 @@ export const useSomatoriosStore = create<SomatoriosState>()((set, get) => ({
 
   add: async (s) => {
     if (!s.workspaceId) return null
-    // 🔍 DIAGNÓSTICO TEMPORÁRIO — mostra o que o Supabase vê na sua sessão
-    try {
-      const { data: sess } = await supabase.auth.getSession()
-      const { data: me } = await supabase
-        .from("usuarios")
-        .select("id, workspace_id")
-        .eq("id", sess?.session?.user?.id ?? "")
-        .maybeSingle()
-      console.log("🔍 [somatorios.add] diag:", {
-        sendingWorkspaceId: s.workspaceId,
-        authUid: sess?.session?.user?.id ?? null,
-        usuariosRow: me ?? null,
-      })
-    } catch (e) {
-      console.log("🔍 [somatorios.add] diag error:", e)
-    }
     const { data, error } = await supabase
       .from("somatorios")
       .insert({
