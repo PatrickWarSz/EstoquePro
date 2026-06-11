@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Plus, Pencil, Trash2, Sigma, AlertTriangle, CheckCircle2 } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useStockStore } from "@/lib/stock-store"
@@ -18,9 +19,17 @@ export default function SomatoriosPage() {
   const workspaceId = useAuthStore((s) => s.workspaceId)
   const all = useSomatoriosStore((s) => s.somatorios)
   const remove = useSomatoriosStore((s) => s.remove)
+  const load = useSomatoriosStore((s) => s.load)
+  const loading = useSomatoriosStore((s) => s.loading)
+  const loadedWorkspaceId = useSomatoriosStore((s) => s.loadedWorkspaceId)
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<Somatorio | null>(null)
+
+  // Carrega/recarrega sempre que o workspace mudar ou ao abrir a página
+  useEffect(() => {
+    load(workspaceId)
+  }, [workspaceId, load])
 
   const somatorios = useMemo(
     () => all.filter((s) => s.workspaceId === workspaceId),
@@ -126,8 +135,14 @@ export default function SomatoriosPage() {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-destructive hover:text-destructive"
-                      onClick={() => {
-                        if (confirm(`Excluir somatório "${s.name}"?`)) remove(s.id)
+                      onClick={async () => {
+                        if (!confirm(`Excluir somatório "${s.name}"?`)) return
+                        try {
+                          await remove(s.id)
+                          toast.success("Somatório excluído.")
+                        } catch (e: any) {
+                          toast.error(e?.message || "Erro ao excluir.")
+                        }
                       }}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
