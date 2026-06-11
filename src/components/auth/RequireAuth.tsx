@@ -69,6 +69,7 @@ export function RequireAuth({
       "scanner",
       "pedidos",
       "fornecedores",
+      "somatorios",
       "historico",
       "etiquetas",
       "configuracoes",

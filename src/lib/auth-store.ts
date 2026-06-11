@@ -2,7 +2,7 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import { toast } from "sonner"
 
-export type ModuleKey = "estoque" | "pedidos" | "fornecedores" | "historico" | "scanner" | "etiquetas" | "configuracoes"
+export type ModuleKey = "estoque" | "pedidos" | "fornecedores" | "historico" | "scanner" | "etiquetas" | "somatorios" | "configuracoes"
 export type Permissions = Record<ModuleKey, boolean>;
 
 export const ALL_MODULES: { key: ModuleKey; label: string; description: string }[] =[
@@ -12,15 +12,16 @@ export const ALL_MODULES: { key: ModuleKey; label: string; description: string }
   { key: "historico", label: "Histórico", description: "Ver histórico geral" },
   { key: "scanner", label: "Scanner QR", description: "Ler QR para entrada/saída" },
   { key: "etiquetas", label: "Etiquetas QR", description: "Gerar e imprimir etiquetas" },
+  { key: "somatorios", label: "Somatórios", description: "Totalizadores de estoque" },
   { key: "configuracoes", label: "Configurações", description: "Ajustes do sistema" },
 ]
 
 export const emptyPermissions = (): Permissions => ({
-  estoque: false, pedidos: false, fornecedores: false, historico: false, scanner: false, etiquetas: false, configuracoes: false,
+  estoque: false, pedidos: false, fornecedores: false, historico: false, scanner: false, etiquetas: false, somatorios: false, configuracoes: false,
 })
 
 export const fullPermissions = (): Permissions => ({
-  estoque: true, pedidos: true, fornecedores: true, historico: true, scanner: true, etiquetas: true, configuracoes: true,
+  estoque: true, pedidos: true, fornecedores: true, historico: true, scanner: true, etiquetas: true, somatorios: true, configuracoes: true,
 })
 
 export interface Employee {

@@ -16,6 +16,7 @@ import ScannerPage from "./pages/ScannerPage";
 import EtiquetasPage from "./pages/EtiquetasPage";
 import FuncionariosPage from "./pages/FuncionariosPage";
 import EmployeeHistoryPage from "./pages/EmployeeHistoryPage";
+import SomatoriosPage from "./pages/SomatoriosPage";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { PwaUpdater } from "@/components/pwa-updater";
 import { useAuthStore } from "@/lib/auth-store";
@@ -56,6 +57,7 @@ const App = () => {
                 <Route path="historico" element={<RequireAuth module="historico"><HistoricoPage /></RequireAuth>} />
                 <Route path="scanner" element={<RequireAuth module="scanner"><ScannerPage /></RequireAuth>} />
                 <Route path="etiquetas" element={<RequireAuth module="etiquetas"><EtiquetasPage /></RequireAuth>} />
+                <Route path="somatorios" element={<RequireAuth module="somatorios"><SomatoriosPage /></RequireAuth>} />
                 <Route path="configuracoes" element={<RequireAuth module="configuracoes"><ConfiguracoesPage /></RequireAuth>} />
                 <Route path="funcionarios" element={<RequireAuth adminOnly><FuncionariosPage /></RequireAuth>} />
                 <Route path="funcionarios/:id/historico" element={<RequireAuth adminOnly><EmployeeHistoryPage /></RequireAuth>} />
