@@ -146,33 +146,40 @@ export function SomatorioEditor({ open, onOpenChange, editing }: Props) {
     })
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) return toast.error("Dê um nome ao somatório.")
     if (!unit) return toast.error("Escolha a unidade.")
     if (selected.size === 0) return toast.error("Selecione ao menos 1 item.")
     const min =
       minQty.trim() === "" ? null : Math.max(0, Number(minQty.replace(",", ".")) || 0)
 
-    if (editing) {
-      update(editing.id, {
-        name: name.trim(),
-        unit,
-        itemRefs: Array.from(selected),
-        minQuantity: min,
-        workspaceId,
-      })
-      toast.success("Somatório atualizado.")
-    } else {
-      add({
-        workspaceId,
-        name: name.trim(),
-        unit,
-        itemRefs: Array.from(selected),
-        minQuantity: min,
-      })
-      toast.success("Somatório criado.")
+    try {
+      if (editing) {
+        await update(editing.id, {
+          name: name.trim(),
+          unit,
+          itemRefs: Array.from(selected),
+          minQuantity: min,
+        })
+        toast.success("Somatório atualizado.")
+      } else {
+        if (!workspaceId) {
+          toast.error("Sessão sem workspace ativo.")
+          return
+        }
+        await add({
+          workspaceId,
+          name: name.trim(),
+          unit,
+          itemRefs: Array.from(selected),
+          minQuantity: min,
+        })
+        toast.success("Somatório criado.")
+      }
+      onOpenChange(false)
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao salvar somatório.")
     }
-    onOpenChange(false)
   }
 
   return (
