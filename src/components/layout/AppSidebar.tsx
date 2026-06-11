@@ -41,8 +41,13 @@ export function AppSidebar() {
     (o) => o.deliveryStatus === "Entrega Incompleta",
   ).length;
 
-  const operacao = operacaoAll.filter((i) => user?.permissions[i.module]);
-  const isAdmin = user?.kind === "admin" || user?.isAdmin === true;
+  const isAdmin =
+    user?.kind === "admin" ||
+    user?.isAdmin === true ||
+    (user as any)?.tipo === "admin";
+  const operacao = operacaoAll.filter(
+    (i) => isAdmin || user?.permissions?.[i.module],
+  );
 
   const linkBase =
     "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
