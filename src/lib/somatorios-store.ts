@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import { persist } from "zustand/middleware"
+import { supabase } from "./supabase"
 
 export interface Somatorio {
   id: string
@@ -14,47 +14,113 @@ export interface Somatorio {
 
 interface SomatoriosState {
   somatorios: Somatorio[]
-  add: (s: Omit<Somatorio, "id" | "createdAt" | "updatedAt">) => string
-  update: (id: string, updates: Partial<Omit<Somatorio, "id" | "createdAt">>) => void
-  remove: (id: string) => void
+  loading: boolean
+  loadedWorkspaceId: string | null
+  load: (workspaceId: string | null) => Promise<void>
+  add: (s: Omit<Somatorio, "id" | "createdAt" | "updatedAt">) => Promise<string | null>
+  update: (id: string, updates: Partial<Omit<Somatorio, "id" | "createdAt">>) => Promise<void>
+  remove: (id: string) => Promise<void>
   getForWorkspace: (workspaceId: string | null) => Somatorio[]
 }
 
-const genId = () =>
-  Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
+function rowToSomatorio(r: any): Somatorio {
+  return {
+    id: r.id,
+    workspaceId: r.workspace_id,
+    name: r.name,
+    unit: r.unit,
+    itemRefs: Array.isArray(r.item_refs) ? r.item_refs : [],
+    minQuantity: r.min_quantity == null ? null : Number(r.min_quantity),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
 
-export const useSomatoriosStore = create<SomatoriosState>()(
-  persist(
-    (set, get) => ({
-      somatorios: [],
-      add: (s) => {
-        const now = new Date().toISOString()
-        const id = genId()
-        set({
-          somatorios: [
-            ...get().somatorios,
-            { ...s, id, createdAt: now, updatedAt: now },
-          ],
-        })
-        return id
-      },
-      update: (id, updates) => {
-        const now = new Date().toISOString()
-        set({
-          somatorios: get().somatorios.map((s) =>
-            s.id === id ? { ...s, ...updates, updatedAt: now } : s,
-          ),
-        })
-      },
-      remove: (id) => {
-        set({ somatorios: get().somatorios.filter((s) => s.id !== id) })
-      },
-      getForWorkspace: (workspaceId) =>
-        get().somatorios.filter((s) => s.workspaceId === workspaceId),
-    }),
-    {
-      name: "somatorios-local-v1",
-      partialize: (state) => ({ somatorios: state.somatorios }),
-    },
-  ),
-)
+export const useSomatoriosStore = create<SomatoriosState>()((set, get) => ({
+  somatorios: [],
+  loading: false,
+  loadedWorkspaceId: null,
+
+  load: async (workspaceId) => {
+    if (!workspaceId) {
+      set({ somatorios: [], loadedWorkspaceId: null })
+      return
+    }
+    set({ loading: true })
+    const { data, error } = await supabase
+      .from("somatorios")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: true })
+    if (error) {
+      console.error("[somatorios.load]", error)
+      set({ loading: false })
+      return
+    }
+    set({
+      somatorios: (data || []).map(rowToSomatorio),
+      loading: false,
+      loadedWorkspaceId: workspaceId,
+    })
+  },
+
+  add: async (s) => {
+    if (!s.workspaceId) return null
+    const { data, error } = await supabase
+      .from("somatorios")
+      .insert({
+        workspace_id: s.workspaceId,
+        name: s.name,
+        unit: s.unit,
+        item_refs: s.itemRefs,
+        min_quantity: s.minQuantity ?? null,
+      })
+      .select()
+      .single()
+    if (error || !data) {
+      console.error("[somatorios.add]", error)
+      throw new Error(error?.message || "Falha ao salvar somatório")
+    }
+    const row = rowToSomatorio(data)
+    set({ somatorios: [...get().somatorios, row] })
+    return row.id
+  },
+
+  update: async (id, updates) => {
+    const patch: any = {}
+    if (updates.name !== undefined) patch.name = updates.name
+    if (updates.unit !== undefined) patch.unit = updates.unit
+    if (updates.itemRefs !== undefined) patch.item_refs = updates.itemRefs
+    if (updates.minQuantity !== undefined) patch.min_quantity = updates.minQuantity
+    patch.updated_at = new Date().toISOString()
+
+    const { data, error } = await supabase
+      .from("somatorios")
+      .update(patch)
+      .eq("id", id)
+      .select()
+      .single()
+    if (error || !data) {
+      console.error("[somatorios.update]", error)
+      throw new Error(error?.message || "Falha ao atualizar somatório")
+    }
+    const row = rowToSomatorio(data)
+    set({
+      somatorios: get().somatorios.map((s) => (s.id === id ? row : s)),
+    })
+  },
+
+  remove: async (id) => {
+    const prev = get().somatorios
+    set({ somatorios: prev.filter((s) => s.id !== id) })
+    const { error } = await supabase.from("somatorios").delete().eq("id", id)
+    if (error) {
+      console.error("[somatorios.remove]", error)
+      set({ somatorios: prev })
+      throw new Error(error.message)
+    }
+  },
+
+  getForWorkspace: (workspaceId) =>
+    get().somatorios.filter((s) => s.workspaceId === workspaceId),
+}))
