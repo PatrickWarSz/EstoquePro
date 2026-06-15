@@ -1,5 +1,6 @@
 import { Package, ShoppingCart, Truck, History, Settings, ScanLine, QrCode, Users, Sigma } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
+import logoAsset from "@/assets/estoquepro-logo.png.asset.json";
 import {
   Sidebar,
   SidebarContent,
@@ -58,11 +59,11 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border">
         <NavLink to="/app/estoque" className="flex items-center gap-3 px-2 py-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background shadow-sm font-mono-vexo text-[11px] font-medium">
-            <span className="text-primary">&gt;</span>
-            <span className="px-0.5">V</span>
-            <span className="text-primary">&lt;</span>
-          </div>
+          <img
+            src={logoAsset.url}
+            alt="EstoquePro"
+            className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-sm"
+          />
           {!collapsed && (
             <div className="flex flex-col leading-tight">
               <span className="font-display text-[14px] font-semibold tracking-tight text-foreground">
