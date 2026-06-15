@@ -62,7 +62,7 @@ export function AppSidebar() {
           <img
             src={logoAsset.url}
             alt="EstoquePro"
-            className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-sm"
+            className="h-9 w-9 shrink-0 rounded-lg object-contain"
           />
           {!collapsed && (
             <div className="flex flex-col leading-tight">
