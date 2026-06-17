@@ -58,18 +58,19 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border">
-        <NavLink to="/app/estoque" className="flex items-center gap-3 px-2 py-2">
-          <img
-            src={logoAsset.url}
-            alt="EstoquePro"
-            className="h-9 w-9 shrink-0 rounded-lg object-contain"
-          />
-          {!collapsed && (
-            <div className="flex flex-col leading-tight">
-              <span className="font-display text-[14px] font-semibold tracking-tight text-foreground">
-                EstoquePro
-              </span>
-            </div>
+        <NavLink to="/app/estoque" className="flex items-center justify-center px-2 py-2">
+          {collapsed ? (
+            <img
+              src={logoAsset.url}
+              alt="EstoquePro"
+              className="h-8 w-8 shrink-0 object-contain"
+            />
+          ) : (
+            <img
+              src={logoAsset.url}
+              alt="EstoquePro"
+              className="h-10 w-auto max-w-full object-contain"
+            />
           )}
         </NavLink>
       </SidebarHeader>
