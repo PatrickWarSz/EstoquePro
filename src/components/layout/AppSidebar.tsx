@@ -15,20 +15,18 @@ import {
 } from "@/components/ui/sidebar";
 import { useStockStore } from "@/lib/stock-store";
 import { ModuleKey, useAuthStore } from "@/lib/auth-store";
+import logoAsset from "@/assets/estoquepro-logo.png.asset.json";
 
 type NavItem = { title: string; url: string; icon: any; module: ModuleKey };
 
 function EstoqueProLogo({ collapsed }: { collapsed: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm">
-        <svg viewBox="0 0 64 64" aria-hidden="true" className="h-6 w-6 fill-current">
-          <path d="M27 10h10l5 7H22l5-7Z" opacity="0.98" />
-          <path d="M13 28h16v14H13V28Zm22 0h16v14H35V28Z" />
-          <path d="M26 19h12v15H26V19Z" />
-          <path d="M24 46h16v7H24v-7Zm-12-1h17v6H12v-6Zm23 0h17v6H35v-6Z" opacity="0.95" />
-        </svg>
-      </span>
+      <img
+        src={logoAsset.url}
+        alt="EstoquePro"
+        className="h-8 w-8 shrink-0 rounded-md object-cover shadow-sm"
+      />
       {!collapsed && <span className="truncate text-base font-semibold text-sidebar-foreground">EstoquePro</span>}
     </div>
   );
