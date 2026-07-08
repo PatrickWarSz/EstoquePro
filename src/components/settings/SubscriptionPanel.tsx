@@ -41,7 +41,7 @@ export function SubscriptionPanel({
     async function checkPlan() {
       if (!workspaceId) return;
       const { supabase } = await import("@/lib/supabase");
-      const { data } = await supabase.from('workspaces').select('plano_atual').eq('id', workspaceId).single();
+      const { data } = await supabase.from('workspaces').select('plano_atual').eq('id', workspaceId).maybeSingle();
       if (data) setCurrentPlan(data.plano_atual);
     }
     checkPlan();
