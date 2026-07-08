@@ -222,7 +222,7 @@ export const useAuthStore = create<AuthState>()(
             .from('workspaces')
             .select('status_assinatura, data_vencimento, asaas_portal_url')
             .eq('id', workspaceId)
-            .single();
+            .maybeSingle();
 
           if (data && !error) {
             set({
