@@ -242,6 +242,16 @@ export const useAuthStore = create<AuthState>()(
           const workspaceId = get().workspaceId;
           if (!workspaceId) return { ok: false, error: 'Sessão inválida.' };
 
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          if (token) {
+            const fallback = await supabase.functions.invoke('workspace-data', {
+              body: { action: 'backup_create' },
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!fallback.error && fallback.data?.ok) return { ok: true, id: fallback.data.id };
+          }
+
           const [usuariosRes, produtosRes, categoriasRes, movRes,
                  locaisRes, pedidosRes, fornecedoresRes, entregasRes, aliasesRes] = await Promise.all([
             supabase.from('usuarios').select('*').eq('workspace_id', workspaceId),
@@ -562,18 +572,31 @@ export const useAuthStore = create<AuthState>()(
         }
 
         const { data, error } = await query;
-        if (error) {
+        let rows = data || [];
+        if (error || rows.length === 0) {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          if (token) {
+            const fallback = await supabase.functions.invoke('workspace-data', {
+              body: { action: 'employees' },
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!fallback.error) rows = fallback.data?.data || [];
+            else if (error) console.error('[fetchEmployees] fallback error', fallback.error);
+          }
+        }
+        if (error && rows.length === 0) {
           console.error('[fetchEmployees] error', error);
           return;
         }
 
-        if (!data || data.length === 0) {
+        if (rows.length === 0) {
           // no more
           set({ employeesHasMore: false });
           return;
         }
 
-        const emps: Employee[] = data.map((e: any) => ({
+        const emps: Employee[] = rows.map((e: any) => ({
           id: e.id,
           username: e.username,
           passwordHash: 'migrated',
@@ -584,12 +607,12 @@ export const useAuthStore = create<AuthState>()(
           createdAt: e.criado_em,
         }));
 
-        const nextCursor = data[data.length - 1]?.criado_em || null;
+        const nextCursor = rows[rows.length - 1]?.criado_em || null;
 
         if (append) {
-          set({ employees: [...get().employees, ...emps], employeeCursor: nextCursor, employeesHasMore: data.length === limit });
+          set({ employees: [...get().employees, ...emps], employeeCursor: nextCursor, employeesHasMore: rows.length === limit });
         } else {
-          set({ employees: emps, employeeCursor: nextCursor, employeesHasMore: data.length === limit });
+          set({ employees: emps, employeeCursor: nextCursor, employeesHasMore: rows.length === limit });
         }
       },
 

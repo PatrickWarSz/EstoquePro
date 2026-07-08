@@ -76,13 +76,24 @@ export function BackupPanel() {
     setLoadingList(true)
     try {
       const { supabase } = await import("@/lib/supabase")
-      const { data } = await supabase
+      let { data, error } = await supabase
         .from("backup_logs")
         .select("*")
         .eq("workspace_id", workspaceId)
         .eq("status", "ok")
         .order("criado_em", { ascending: false })
         .limit(7)
+      if (error || !data?.length) {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData.session?.access_token
+        if (token) {
+          const fallback = await supabase.functions.invoke("workspace-data", {
+            body: { action: "backups_list" },
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (!fallback.error) data = fallback.data?.data || []
+        }
+      }
       setBackups(data || [])
     } catch {
       toast.error("Erro ao carregar lista de backups.")
