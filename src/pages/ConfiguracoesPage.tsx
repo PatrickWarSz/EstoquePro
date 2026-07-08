@@ -26,11 +26,11 @@ export default function ConfiguracoesPage() {
       if (!workspaceId) return;
       const { supabase } = await import("@/lib/supabase");
       
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("workspaces")
         .select("status_assinatura, data_vencimento")
         .eq("id", workspaceId)
-        .single();
+        .maybeSingle();
 
       if (data) {
         // Converte o status do banco para a tela

@@ -97,7 +97,7 @@ useEffect(() => {
       .from('workspaces')
       .select('nome_empresa, cnpj_cpf, slug')
       .eq('id', workspaceId)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         if (data) {
           const slugBase = data.slug || data.nome_empresa || data.cnpj_cpf || 'empresa'
