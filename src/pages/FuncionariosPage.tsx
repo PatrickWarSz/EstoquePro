@@ -98,7 +98,18 @@ useEffect(() => {
       .select('nome_empresa, cnpj_cpf, slug')
       .eq('id', workspaceId)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(async ({ data }) => {
+        if (!data) {
+          const { data: sessionData } = await supabase.auth.getSession()
+          const token = sessionData.session?.access_token
+          if (token) {
+            const fallback = await supabase.functions.invoke('workspace-data', {
+              body: { action: 'workspace_info' },
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            data = fallback.data?.data || null
+          }
+        }
         if (data) {
           const slugBase = data.slug || data.nome_empresa || data.cnpj_cpf || 'empresa'
           const slug = slugBase

@@ -47,11 +47,25 @@ export const useSomatoriosStore = create<SomatoriosState>()((set, get) => ({
       return
     }
     set({ loading: true })
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("somatorios")
       .select("*")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: true })
+    if (error || !data?.length) {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (token) {
+        const fallback = await supabase.functions.invoke("workspace-data", {
+          body: { action: "somatorios_list" },
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!fallback.error) {
+          data = fallback.data?.data || []
+          error = null
+        }
+      }
+    }
     if (error) {
       console.error("[somatorios.load]", error)
       set({ loading: false })
@@ -66,17 +80,32 @@ export const useSomatoriosStore = create<SomatoriosState>()((set, get) => ({
 
   add: async (s) => {
     if (!s.workspaceId) return null
-    const { data, error } = await supabase
-      .from("somatorios")
-      .insert({
+    const rowPayload = {
         workspace_id: s.workspaceId,
         name: s.name,
         unit: s.unit,
         item_refs: s.itemRefs,
         min_quantity: s.minQuantity ?? null,
-      })
+      }
+    let { data, error } = await supabase
+      .from("somatorios")
+      .insert(rowPayload)
       .select()
       .single()
+    if (error || !data) {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (token) {
+        const fallback = await supabase.functions.invoke("workspace-data", {
+          body: { action: "somatorio_add", payload: rowPayload },
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!fallback.error) {
+          data = fallback.data?.data
+          error = null
+        }
+      }
+    }
     if (error || !data) {
       console.error("[somatorios.add]", error)
       throw new Error(error?.message || "Falha ao salvar somatório")
@@ -94,12 +123,26 @@ export const useSomatoriosStore = create<SomatoriosState>()((set, get) => ({
     if (updates.minQuantity !== undefined) patch.min_quantity = updates.minQuantity
     patch.updated_at = new Date().toISOString()
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("somatorios")
       .update(patch)
       .eq("id", id)
       .select()
       .single()
+    if (error || !data) {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (token) {
+        const fallback = await supabase.functions.invoke("workspace-data", {
+          body: { action: "somatorio_update", payload: { id, updates: patch } },
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!fallback.error) {
+          data = fallback.data?.data
+          error = null
+        }
+      }
+    }
     if (error || !data) {
       console.error("[somatorios.update]", error)
       throw new Error(error?.message || "Falha ao atualizar somatório")
@@ -113,7 +156,18 @@ export const useSomatoriosStore = create<SomatoriosState>()((set, get) => ({
   remove: async (id) => {
     const prev = get().somatorios
     set({ somatorios: prev.filter((s) => s.id !== id) })
-    const { error } = await supabase.from("somatorios").delete().eq("id", id)
+    let { error } = await supabase.from("somatorios").delete().eq("id", id)
+    if (error) {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (token) {
+        const fallback = await supabase.functions.invoke("workspace-data", {
+          body: { action: "somatorio_delete", payload: { id } },
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!fallback.error) error = null
+      }
+    }
     if (error) {
       console.error("[somatorios.remove]", error)
       set({ somatorios: prev })
