@@ -290,7 +290,7 @@ export const useAuthStore = create<AuthState>()(
 
           const { error: upErr } = await supabase.storage
             .from('backups')
-            .upload(storagePath, blob, { contentType: 'application/json', upsert: false });
+            .upload(storagePath, blob, { contentType: 'application/json', upsert: true });
           if (upErr) return { ok: false, error: upErr.message };
 
           // Tabela correta: backup_logs (não "backups")
