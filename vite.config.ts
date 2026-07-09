@@ -17,7 +17,11 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
-      registerType: "prompt",
+      // "autoUpdate": assim que uma versão nova é publicada, o app atualiza
+      // sozinho (sem depender do usuário clicar em "Atualizar" no aviso).
+      // Antes era "prompt", que deixava o usuário preso na versão antiga
+      // indefinidamente se ele clicasse em "Depois" (ou nem visse o aviso).
+      registerType: "autoUpdate",
       // Desativado no dev para não interferir com o preview do Lovable
       devOptions: { enabled: false },
       includeAssets: ["favicon.ico", "pwa-192.png", "pwa-512.png"],
