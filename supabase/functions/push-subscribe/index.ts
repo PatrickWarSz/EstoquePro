@@ -1,28 +1,19 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0"
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors"
 
-const ALLOWED_ORIGINS = [
-  "https://auth.vexodev.com.br",
-  "https://app.vexodev.com.br",
-  "https://estoque.vexodev.com.br",
-  "http://localhost:8080",
-]
-
-const cors = (origin: string | null) => {
-  const headers: Record<string, string> = {
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-  }
-  if (origin && ALLOWED_ORIGINS.includes(origin)) headers["Access-Control-Allow-Origin"] = origin
-  return headers
+const responseHeaders = {
+  ...corsHeaders,
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 }
 
 const json = (body: unknown, status = 200, headers = {}) =>
   new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json" } })
 
 serve(async (req) => {
-  const headers = cors(req.headers.get("origin"))
-  if (req.method === "OPTIONS") return new Response("ok", { headers })
+  const headers = responseHeaders
+  if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers })
 
   try {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!)

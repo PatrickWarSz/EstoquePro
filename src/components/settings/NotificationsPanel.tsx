@@ -17,7 +17,7 @@ import { supabase } from "@/lib/supabase"
 
 type Device = { id: string; device_id: string; device_label: string; created_at: string }
 
-export function NotificationsPanel() {
+export function NotificationsPanel({ compact = false }: { compact?: boolean }) {
   const [supported] = useState(pushSupported())
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">(currentPermission())
   const [devices, setDevices] = useState<Device[]>([])
@@ -88,7 +88,7 @@ export function NotificationsPanel() {
   const isSubscribedHere = devices.some((d) => d.device_id === thisDevice)
 
   return (
-    <Card className="p-5 space-y-4">
+    <Card className={`${compact ? "border-0 p-0 shadow-none" : "p-5"} space-y-4`}>
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
           <Bell className="h-5 w-5" />

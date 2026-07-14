@@ -3,9 +3,11 @@
 -- ============================================================
 -- Também configure as secrets nas Edge Functions do projeto:
 --   VAPID_PUBLIC_KEY  = BDU8KtY2ByrPzjGr94iHlfnoDQxT5fY32n9t6RroeCnySd8quhzfT6WEo718rjtu-ZC0E583_aXoVjyYWEMuwZM
---   VAPID_PRIVATE_KEY = YSEXx4AG369Lp6R8bHPKVzv3SsWMZc0Rza0BTb3w0PY
+--   VAPID_PRIVATE_KEY = cole_a_chave_privada_gerada_sem_colocar_no_codigo
 --   VAPID_SUBJECT     = mailto:suporte@vexodev.com.br
 -- Depois faça deploy das funções: push-subscribe e push-notify.
+-- IMPORTANTE: elas precisam estar com verify_jwt = false, pois o preflight CORS (OPTIONS)
+-- não envia token; o código da função valida o usuário manualmente pelo Authorization Bearer.
 
 -- 1) Inscrições de push por dispositivo/usuário
 CREATE TABLE IF NOT EXISTS public.push_subscriptions (
