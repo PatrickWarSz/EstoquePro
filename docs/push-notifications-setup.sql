@@ -8,6 +8,9 @@
 -- Depois faça deploy das funções: push-subscribe e push-notify.
 -- IMPORTANTE: elas precisam estar com verify_jwt = false, pois o preflight CORS (OPTIONS)
 -- não envia token; o código da função valida o usuário manualmente pelo Authorization Bearer.
+-- Se usar Supabase CLI, publique assim:
+--   supabase functions deploy push-subscribe --no-verify-jwt
+--   supabase functions deploy push-notify --no-verify-jwt
 
 -- 1) Inscrições de push por dispositivo/usuário
 CREATE TABLE IF NOT EXISTS public.push_subscriptions (
