@@ -10,6 +10,7 @@ import { toast } from "sonner";
 
 import { SubscriptionPanel, SubscriptionStatus } from "@/components/settings/SubscriptionPanel";
 import { BackupPanel } from "@/components/settings/BackupPanel";
+import { NotificationsPanel } from "@/components/settings/NotificationsPanel";
 
 export default function ConfiguracoesPage() {
   const { theme, setTheme } = useTheme();
@@ -129,6 +130,9 @@ export default function ConfiguracoesPage() {
 
       {/* BACKUP DE DADOS */}
       <BackupPanel />
+
+      {/* NOTIFICAÇÕES DE ESTOQUE */}
+      <NotificationsPanel />
 
     </div>
   );

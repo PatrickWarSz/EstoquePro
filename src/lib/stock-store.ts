@@ -377,6 +377,11 @@ categories = sortedCats.map(cat => ({
         const wId = useAuthStore.getState().workspaceId;
         const op = getCurrentOperator();
 
+        // Guarda a quantidade anterior para disparar alertas de estoque
+        const prevCat = get().categories.find(c => c.id === catId);
+        const prevItem = prevCat?.items.find(i => i.id === itemId);
+        const prevQ = prevItem ? Number(prevItem.quantity) : newQ;
+
         // If offline, enqueue the movement and update local state immediately
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
           const { enqueuePendingMovementWithRetry } = await import('./idb-queue');
@@ -401,6 +406,12 @@ categories = sortedCats.map(cat => ({
         await supabase.from('produtos').update({ quantidade: newQ }).eq('id', itemId).eq('workspace_id', wId);
         await supabase.from('movimentacoes').insert([{ workspace_id: wId, produto_id: itemId, tipo: type, quantidade: movQ, novo_total: newQ, observacao: note, pedido_id: orderId || null, operador_id: op.id !== 'admin' ? op.id : null, nome_operador: op.name || 'Administrador', data: new Date().toISOString() }]);
         await get().initialize();
+
+        // Dispara verificação de alertas (baixo/zerado) — não bloqueia a operação
+        try {
+          const { triggerStockAlertCheck } = await import('./push');
+          triggerStockAlertCheck(itemId, prevQ, newQ);
+        } catch (_) {}
       },
 
       addCategory: async (cat) => {
