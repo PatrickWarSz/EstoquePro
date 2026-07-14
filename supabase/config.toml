@@ -470,3 +470,13 @@ entrypoint = "./functions/delete-auth-user/index.ts"
 
 [functions.scheduled-backup]
 verify_jwt = false
+
+[functions.push-subscribe]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/push-subscribe/index.ts"
+
+[functions.push-notify]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/push-notify/index.ts"

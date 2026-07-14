@@ -19,6 +19,7 @@ import { countPendingMovementsFor, getPendingMovements, removePendingMovement } 
 import { countOps, listOps, removeOp, type QueuedOp } from "@/lib/op-queue";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { NotificationsButton } from "@/components/notifications/NotificationsButton";
 
 export function TopBar() {
   const { theme, setTheme } = useTheme();
@@ -180,6 +181,7 @@ export function TopBar() {
             <span className="hidden sm:inline">{lowOrZero === 1 ? "alerta" : "alertas"}</span>
           </button>
         )}
+        <NotificationsButton />
         <Button
           variant="ghost"
           size="icon"
