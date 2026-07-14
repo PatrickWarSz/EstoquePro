@@ -348,7 +348,12 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         // SEGURANÇA: Limpar listeners de acesso antes de logout
         get()._cleanupAccessControl();
-        
+
+        // Remove inscrição de push deste dispositivo antes de sair (evita receber alertas de outra conta)
+        try {
+          import('./push').then(({ unsubscribeCurrent }) => { unsubscribeCurrent().catch(() => {}) })
+        } catch (_) {}
+
         import('./supabase').then(({ supabase }) => {
           supabase.auth.signOut().then(() => {
             set({ currentUserId: null, workspaceId: null, admin: null, employees:[], subscriptionStatus: null, expiryDate: null, asaasPortalUrl: null });
