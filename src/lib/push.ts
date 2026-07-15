@@ -2,7 +2,7 @@ import { supabase } from "./supabase"
 
 export const VAPID_PUBLIC_KEY =
   (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) ||
-  "BDU8KtY2ByrPzjGr94iHlfnoDQxT5fY32n9t6RroeCnySd8quhzfT6WEo718rjtu-ZC0E583_aXoVjyYWEMuwZM"
+  "BMhjW3T5pXm9iBW4r6QkENlWM6-EOcC4yXvZ4cWBX7ENR64H9skBWs2_URhHVozwSi-0JiqDjlP9kKtINK0U610"
 
 const SW_URL = "/push-sw.js"
 const DEVICE_KEY = "estoque.push.deviceId.v1"
