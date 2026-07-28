@@ -485,24 +485,39 @@ useEffect(() => {
       changes: [],
     }
 
+    let pendingSync = false
+    let failed = false
+
     if (summary.kind === "single" && selectedItem) {
       const r = summary.rows[0]
-      updateItemQuantity(
-        selectedItem.categoryId,
-        selectedItem.item.id,
-        r.next,
-        summary.type,
-        r.qty,
-        note.trim() || undefined,
-      )
-      undo.changes.push({
-        categoryId: selectedItem.categoryId,
-        itemId: selectedItem.item.id,
-        itemName: r.itemName,
-        unit: r.unit,
-        delta: summary.type === "entrada" ? r.qty : -r.qty,
-        previousQty: r.previous,
-      })
+      try {
+        await updateItemQuantity(
+          selectedItem.categoryId,
+          selectedItem.item.id,
+          r.next,
+          summary.type,
+          r.qty,
+          note.trim() || undefined,
+        )
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : ''
+        if (msg === 'PENDING_SYNC') {
+          pendingSync = true
+        } else {
+          failed = true
+        }
+      }
+
+      if (!failed) {
+        undo.changes.push({
+          categoryId: selectedItem.categoryId,
+          itemId: selectedItem.item.id,
+          itemName: r.itemName,
+          unit: r.unit,
+          delta: summary.type === "entrada" ? r.qty : -r.qty,
+          previousQty: r.previous,
+        })
+      }
       closeSheet()
     } else if (summary.kind === "batch") {
       // Aplica o lote em uma única operação (melhor performance)
@@ -545,12 +560,20 @@ useEffect(() => {
     }
 
     setLastUndo(undo)
-    if (soundOn) beep("success")
-    toast.success(
-      summary.kind === "batch"
-        ? `${undo.changes.length} movimentação(ões) registrada(s)`
-        : `${summary.type === "entrada" ? "Entrada" : "Saída"} registrada`,
-    )
+    if (failed) {
+      if (soundOn) beep("error")
+      toast.error('Não foi possível registrar a movimentação. Tente novamente.')
+    } else if (pendingSync) {
+      if (soundOn) beep("success")
+      toast.warning(`Sem confirmação do servidor — salvo localmente e será sincronizado automaticamente`)
+    } else {
+      if (soundOn) beep("success")
+      toast.success(
+        summary.kind === "batch"
+          ? `${undo.changes.length} movimentação(ões) registrada(s)`
+          : `${summary.type === "entrada" ? "Entrada" : "Saída"} registrada`,
+      )
+    }
     setSummary(null)
     resumeIfContinuous()
     // Atualiza contador de pendentes

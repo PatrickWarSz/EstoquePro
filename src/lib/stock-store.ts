@@ -402,10 +402,39 @@ categories = sortedCats.map(cat => ({
           return;
         }
 
-        // Online: perform DB updates
-        await supabase.from('produtos').update({ quantidade: newQ }).eq('id', itemId).eq('workspace_id', wId);
-        await supabase.from('movimentacoes').insert([{ workspace_id: wId, produto_id: itemId, tipo: type, quantidade: movQ, novo_total: newQ, observacao: note, pedido_id: orderId || null, operador_id: op.id !== 'admin' ? op.id : null, nome_operador: op.name || 'Administrador', data: new Date().toISOString() }]);
-        await get().initialize();
+        // Online: perform DB updates — AGORA checando erro de verdade em vez de assumir sucesso
+        try {
+          const { error: upErr } = await supabase.from('produtos').update({ quantidade: newQ }).eq('id', itemId).eq('workspace_id', wId);
+          if (upErr) throw new Error(`Falha ao atualizar quantidade: ${upErr.message}`);
+
+          const { error: insErr } = await supabase.from('movimentacoes').insert([{ workspace_id: wId, produto_id: itemId, tipo: type, quantidade: movQ, novo_total: newQ, observacao: note, pedido_id: orderId || null, operador_id: op.id !== 'admin' ? op.id : null, nome_operador: op.name || 'Administrador', data: new Date().toISOString() }]);
+          if (insErr) throw new Error(`Falha ao registrar movimentação: ${insErr.message}`);
+
+          await get().initialize();
+        } catch (err) {
+          // A gravação online falhou (rede instável, timeout, etc.) mesmo com navigator.onLine=true.
+          // Em vez de sumir silenciosamente, cai no mesmo mecanismo de segurança do lote:
+          // guarda na fila local para sincronizar depois E avisa o usuário com clareza.
+          console.error('[updateItemQuantity] Falha ao gravar online, enfileirando para retry:', err);
+          const { enqueuePendingMovementWithRetry } = await import('./idb-queue');
+          const ok = await enqueuePendingMovementWithRetry({ id: generateId(), workspaceId: wId, ownerUserId: useAuthStore.getState().currentUserId, categoryId: catId, itemId, type, movQ, newQ, note, orderId: orderId || null, operatorId: op.id || null, operatorName: op.name || 'Sistema', date: new Date().toISOString() });
+
+          // Atualiza o estado local (otimista) para não travar o fluxo do funcionário no chão de fábrica
+          set((state) => {
+            const cats = state.categories.map(c => {
+              if (c.id !== catId) return c;
+              return {
+                ...c,
+                items: c.items.map(i => i.id === itemId ? { ...i, quantity: newQ, history: [{ id: generateId(), type, quantity: movQ, newTotal: newQ, date: new Date().toISOString(), note: note || '' }, ...(i.history || [])] } : i)
+              };
+            });
+            return { categories: cats } as any;
+          });
+
+          // Relança o erro para quem chamou (a tela) saber que precisa avisar o usuário
+          // que isso foi salvo em modo pendente, não confirmado no servidor ainda.
+          throw new Error(ok ? 'PENDING_SYNC' : 'FAILED_TO_QUEUE');
+        }
 
         // Dispara verificação de alertas (baixo/zerado) — não bloqueia a operação
         try {

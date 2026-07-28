@@ -54,8 +54,10 @@ export function MovementDialog({
     onOpenChange(false)
   }
 
-  const handleConfirm = () => {
-    if (!item || !categoryId) return
+  const [saving, setSaving] = useState(false)
+
+  const handleConfirm = async () => {
+    if (!item || !categoryId || saving) return
 
     let finalQty = 0;
     let finalNote = note.trim();
@@ -90,18 +92,31 @@ export function MovementDialog({
       ? item.quantity + finalQty
       : item.quantity - finalQty
 
-    // Mandamos para o backend sem alterar a estrutura dele!
-    updateItemQuantity(
-      categoryId,
-      item.id,
-      newQuantity,
-      type,
-      finalQty,
-      finalNote || undefined
-    )
-
-    toast.success(`${isEntrada ? "Entrada" : "Saída"} de ${finalQty} ${item.unit} registrada`)
-    handleClose()
+    // Mandamos para o backend e ESPERAMOS a confirmação real antes de comemorar.
+    setSaving(true)
+    try {
+      await updateItemQuantity(
+        categoryId,
+        item.id,
+        newQuantity,
+        type,
+        finalQty,
+        finalNote || undefined
+      )
+      toast.success(`${isEntrada ? "Entrada" : "Saída"} de ${finalQty} ${item.unit} registrada`)
+      handleClose()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      if (msg === 'PENDING_SYNC') {
+        // Não foi perdido: caiu na fila local e vai sincronizar sozinho.
+        toast.warning(`Sem confirmação do servidor — ${isEntrada ? "entrada" : "saída"} salva localmente e será sincronizada automaticamente`)
+        handleClose()
+      } else {
+        toast.error('Não foi possível registrar a movimentação. Tente novamente.')
+      }
+    } finally {
+      setSaving(false)
+    }
   }
 
   const addVolume = () => setVolumes([...volumes, ""])
@@ -242,13 +257,14 @@ export function MovementDialog({
           </Button>
           <Button
             onClick={handleConfirm}
+            disabled={saving}
             className={
               isEntrada
                 ? "bg-success hover:bg-success/90 text-white"
                 : "bg-destructive hover:bg-destructive/90 text-white"
             }
           >
-            Confirmar {isEntrada ? "Entrada" : "Saída"}
+            {saving ? "Salvando..." : `Confirmar ${isEntrada ? "Entrada" : "Saída"}`}
           </Button>
         </DialogFooter>
       </DialogContent>
