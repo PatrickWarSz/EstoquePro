@@ -37,6 +37,12 @@ export default defineConfig(({ mode }) => ({
           },
         ],
         cleanupOutdatedCaches: true,
+        // Une o SW de push notifications ao SW do Workbox no MESMO arquivo/escopo.
+        // Antes, push-sw.js era registrado separadamente em scope:"/" — como só
+        // pode haver um controller por escopo, isso fazia o registro de push
+        // "roubar" o lugar do SW do Workbox (ou vice-versa) e as notificações
+        // paravam de chegar mesmo com a inscrição salva com sucesso no banco.
+        importScripts: ["push-sw.js"],
       },
       manifest: {
         name: "EstoquePro — VEXO",

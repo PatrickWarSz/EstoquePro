@@ -4,7 +4,6 @@ export const VAPID_PUBLIC_KEY =
   (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) ||
   "BL1aKr98OwRwn1KM__AkmNADql4InfSNnEiayTVBy-lcOGf-Wo_LjOt9l7-FA7vnoU7p-3a34O5OtegAGmIYYnY"
 
-const SW_URL = "/push-sw.js"
 const DEVICE_KEY = "estoque.push.deviceId.v1"
 
 export function pushSupported(): boolean {
@@ -66,9 +65,11 @@ function deviceLabel(): string {
 }
 
 async function registerSW(): Promise<ServiceWorkerRegistration> {
-  const existing = await navigator.serviceWorker.getRegistration(SW_URL)
-  if (existing) return existing
-  return navigator.serviceWorker.register(SW_URL, { scope: "/" })
+  // O único SW do app (Workbox + push, unidos via importScripts) já é
+  // registrado pelo PwaUpdater assim que o app carrega. Aqui só esperamos
+  // ele ficar pronto — nunca registramos um segundo SW no mesmo escopo,
+  // que era o que fazia as notificações silenciosamente pararem de chegar.
+  return navigator.serviceWorker.ready
 }
 
 export async function ensureSubscribed(): Promise<{ ok: boolean; reason?: string }> {
@@ -110,7 +111,7 @@ export async function ensureSubscribed(): Promise<{ ok: boolean; reason?: string
 export async function unsubscribeCurrent(): Promise<void> {
   try {
     if (!pushSupported()) return
-    const reg = await navigator.serviceWorker.getRegistration(SW_URL)
+    const reg = await navigator.serviceWorker.ready
     const sub = await reg?.pushManager.getSubscription()
     if (sub) await sub.unsubscribe()
     const { data: { session } } = await supabase.auth.getSession()

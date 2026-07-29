@@ -1,14 +1,10 @@
-// EstoquePro — Push notifications service worker
-// This SW is DEDICATED to web-push messages. It does not cache the app shell,
-// so it never interferes with the app (offline is handled by the app's own queues).
-
-self.addEventListener('install', (event) => {
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
-});
+// EstoquePro — Push notifications
+// Este arquivo roda DENTRO do Service Worker do Workbox via `importScripts`
+// (configurado em vite.config.ts) — não é mais registrado separadamente.
+// Isso evita dois SWs competindo pelo mesmo escopo ("/"), que era o motivo de
+// as notificações pararem de chegar mesmo com a inscrição salva com sucesso.
+// self.skipWaiting()/clients.claim() já são cuidados pelo SW principal
+// (gerado pelo Workbox) — aqui só ficam os handlers exclusivos de push.
 
 self.addEventListener('push', (event) => {
   let payload = {};
