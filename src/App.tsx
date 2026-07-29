@@ -1,25 +1,40 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { useEffect } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "./pages/NotFound.tsx";
 import { ThemeProvider } from "@/components/theme-provider";
 import AppLayout from "./pages/AppLayout";
-import EstoquePage from "./pages/EstoquePage";
-import PedidosPage from "./pages/PedidosPage";
-import FornecedoresPage from "./pages/FornecedoresPage";
-import HistoricoPage from "./pages/HistoricoPage";
-import ConfiguracoesPage from "./pages/ConfiguracoesPage";
-import ScannerPage from "./pages/ScannerPage";
-import EtiquetasPage from "./pages/EtiquetasPage";
-import FuncionariosPage from "./pages/FuncionariosPage";
-import EmployeeHistoryPage from "./pages/EmployeeHistoryPage";
-import SomatoriosPage from "./pages/SomatoriosPage";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { PwaUpdater } from "@/components/pwa-updater";
 import { useAuthStore } from "@/lib/auth-store";
+
+// Cada página vira seu próprio pedaço de JS, baixado só quando o funcionário
+// navega até ela — antes, importar tudo aqui em cima forçava o bundle
+// inteiro (scanner, etiquetas, funcionários, etc.) a entrar no primeiro
+// carregamento do app, mesmo que a pessoa só use "Estoque" no dia a dia.
+const EstoquePage = lazy(() => import("./pages/EstoquePage"));
+const PedidosPage = lazy(() => import("./pages/PedidosPage"));
+const FornecedoresPage = lazy(() => import("./pages/FornecedoresPage"));
+const HistoricoPage = lazy(() => import("./pages/HistoricoPage"));
+const ConfiguracoesPage = lazy(() => import("./pages/ConfiguracoesPage"));
+const ScannerPage = lazy(() => import("./pages/ScannerPage"));
+const EtiquetasPage = lazy(() => import("./pages/EtiquetasPage"));
+const FuncionariosPage = lazy(() => import("./pages/FuncionariosPage"));
+const EmployeeHistoryPage = lazy(() => import("./pages/EmployeeHistoryPage"));
+const SomatoriosPage = lazy(() => import("./pages/SomatoriosPage"));
+
+// Mesmo visual do spinner já usado em RequireAuth.tsx — troca de página deve
+// parecer parte do mesmo app, não um estado de loading diferente.
+function PageFallback() {
+  return (
+    <div className="flex h-screen w-full items-center justify-center bg-white">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neutral-900"></div>
+    </div>
+  );
+}
 
 const queryClient = new QueryClient();
 
@@ -39,7 +54,8 @@ const App = () => {
           <Sonner />
           <PwaUpdater />
           <BrowserRouter>
-            <Routes>
+            <Suspense fallback={<PageFallback />}>
+              <Routes>
               {/* Raiz → app diretamente */}
               <Route path="/" element={<Navigate to="/app/estoque" replace />} />
 
@@ -71,7 +87,8 @@ const App = () => {
               <Route path="/configuracoes" element={<Navigate to="/app/configuracoes" replace />} />
 
               <Route path="*" element={<NotFound />} />
-            </Routes>
+              </Routes>
+            </Suspense>
           </BrowserRouter>
         </TooltipProvider>
       </ThemeProvider>
