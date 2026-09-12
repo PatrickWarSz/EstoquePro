@@ -60,6 +60,9 @@ export interface StockState {
   orders: Order[];
   locations: StockLocation[];
   loading: boolean;
+  syncError: string | null;
+  lastSyncedAt: string | null;
+
   clientId: string | null;
   cacheWorkspaceId?: string | null;
   cacheUserId?: string | null;
@@ -121,6 +124,9 @@ export const useStockStore = create<StockState>()(
       orders: [],
       locations: [],
       loading: false,
+      syncError: null,
+      lastSyncedAt: null,
+
       clientId: 'local-user',
       cacheWorkspaceId: null,
       cacheUserId: null,
@@ -158,19 +164,14 @@ export const useStockStore = create<StockState>()(
             return;
           }
 
-          // Garante que a sessão do Supabase está válida antes de consultar
-          // (RLS retorna 0 linhas sem token — sem erro — e zeraria o estado).
-          let { data: { session } } = await supabase.auth.getSession();
+          // Garante que a sessão do Supabase está válida (e renova quando está
+          // perto de expirar) antes de consultar — RLS retorna 0 linhas sem token.
+          const { ensureSession } = await import('./supabase');
+          const session = await ensureSession();
           if (!session) {
-            try {
-              const { data } = await supabase.auth.refreshSession();
-              session = data.session;
-            } catch { /* ignore */ }
-          }
-          if (!session) {
-            // Sem sessão: NÃO limpa o estado atual — apenas aborta e tenta de novo depois.
+            // Sem sessão: NÃO limpa o estado atual — apenas aborta e sinaliza.
             console.warn('[initialize] sem sessão Supabase — abortando para preservar dados em cache');
-            set({ loading: false });
+            set({ loading: false, syncError: 'Sessão expirada — os dados podem estar desatualizados.' });
             return;
           }
 
@@ -191,15 +192,18 @@ supabase.from('produtos').select('*').eq('workspace_id', workspaceId).is('delete
           // Se alguma consulta essencial falhou (RLS/token/rede), NÃO sobrescreve o
           // que já está em cache — caso contrário a tela fica em branco.
           if (catRes.error || prodRes.error) {
-            console.warn('[initialize] consulta falhou — preservando cache local', catRes.error || prodRes.error);
-            set({ loading: false });
+            const err: any = catRes.error || prodRes.error;
+            console.warn('[initialize] consulta falhou — preservando cache local', err);
+            set({ loading: false, syncError: err?.message || 'Não foi possível atualizar os dados.' });
             return;
           }
+
           // Workspace sem nenhuma categoria retornada apesar de já termos cache do
           // mesmo workspace = provável bloqueio de leitura; preserva o cache.
           if ((catRes.data || []).length === 0 && get().categories.length > 0 && get().cacheWorkspaceId === workspaceId) {
             console.warn('[initialize] retorno vazio inesperado — preservando cache local');
-            set({ loading: false });
+            set({ loading: false, syncError: 'Não foi possível atualizar os dados (leitura bloqueada).' });
+
             return;
           }
 
@@ -271,8 +275,11 @@ categories = sortedCats.map(cat => ({
             qrAliases, 
             selectedCategoryId: nextSelected, 
             loading: false,
+            syncError: null,
+            lastSyncedAt: new Date().toISOString(),
             cacheWorkspaceId: workspaceId,
             cacheUserId: currentUserId,
+
             suppliersCursor: supRes.data && supRes.data.length > 0 ? supRes.data[supRes.data.length - 1].criado_em : null,
             suppliersHasMore: (supRes.data || []).length === 30,
             ordersCursor: pedRes.data && pedRes.data.length > 0 ? pedRes.data[pedRes.data.length - 1].criado_em : null,

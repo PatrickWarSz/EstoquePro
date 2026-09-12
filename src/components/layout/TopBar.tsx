@@ -24,6 +24,8 @@ import { NotificationsButton } from "@/components/notifications/NotificationsBut
 export function TopBar() {
   const { theme, setTheme } = useTheme();
   const { categories } = useStockStore();
+  const syncError = useStockStore((s) => s.syncError);
+
   const currentUserId = useAuthStore((s) => s.currentUserId);
   const getCurrentUser = useAuthStore((s) => s.getCurrentUser);
   const user = getCurrentUser();
@@ -169,6 +171,25 @@ export function TopBar() {
             <span>{pendingCount}</span>
           </button>
         ) : null}
+
+        {isOnline && syncError && (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const { ensureSession } = await import("@/lib/supabase");
+                await ensureSession();
+              } catch { /* ignore */ }
+              await useStockStore.getState().initialize();
+            }}
+            className="flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 sm:px-3 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/15"
+            title={`Dados desatualizados: ${syncError} — toque para reconectar`}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Desatualizado</span>
+          </button>
+        )}
+
 
         {lowOrZero > 0 && (
           <button

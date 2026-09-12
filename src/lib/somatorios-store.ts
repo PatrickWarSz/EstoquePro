@@ -15,6 +15,7 @@ export interface Somatorio {
 interface SomatoriosState {
   somatorios: Somatorio[]
   loading: boolean
+  error: string | null
   loadedWorkspaceId: string | null
   load: (workspaceId: string | null) => Promise<void>
   add: (s: Omit<Somatorio, "id" | "createdAt" | "updatedAt">) => Promise<string | null>
@@ -22,6 +23,7 @@ interface SomatoriosState {
   remove: (id: string) => Promise<void>
   getForWorkspace: (workspaceId: string | null) => Somatorio[]
 }
+
 
 function rowToSomatorio(r: any): Somatorio {
   return {
@@ -39,22 +41,29 @@ function rowToSomatorio(r: any): Somatorio {
 export const useSomatoriosStore = create<SomatoriosState>()((set, get) => ({
   somatorios: [],
   loading: false,
+  error: null,
   loadedWorkspaceId: null,
 
   load: async (workspaceId) => {
     if (!workspaceId) {
-      set({ somatorios: [], loadedWorkspaceId: null })
+      set({ somatorios: [], loadedWorkspaceId: null, error: null })
       return
     }
     set({ loading: true })
+    // Garante token válido — sem sessão o banco devolve 0 linhas sem erro.
+    const { ensureSession } = await import("./supabase")
+    const session = await ensureSession()
+    if (!session) {
+      set({ loading: false, error: "Sessão expirada. Toque em atualizar para reconectar." })
+      return
+    }
     let { data, error } = await supabase
       .from("somatorios")
       .select("*")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: true })
     if (error || !data?.length) {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
+      const token = session.access_token
       if (token) {
         const fallback = await supabase.functions.invoke("workspace-data", {
           body: { action: "somatorios_list" },
@@ -63,20 +72,24 @@ export const useSomatoriosStore = create<SomatoriosState>()((set, get) => ({
         if (!fallback.error) {
           data = fallback.data?.data || []
           error = null
+        } else if (!error) {
+          error = fallback.error as any
         }
       }
     }
     if (error) {
       console.error("[somatorios.load]", error)
-      set({ loading: false })
+      set({ loading: false, error: (error as any)?.message || "Não foi possível carregar os somatórios." })
       return
     }
     set({
       somatorios: (data || []).map(rowToSomatorio),
       loading: false,
+      error: null,
       loadedWorkspaceId: workspaceId,
     })
   },
+
 
   add: async (s) => {
     if (!s.workspaceId) return null
