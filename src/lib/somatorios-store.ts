@@ -15,6 +15,7 @@ export interface Somatorio {
 interface SomatoriosState {
   somatorios: Somatorio[]
   loading: boolean
+  error: string | null
   loadedWorkspaceId: string | null
   load: (workspaceId: string | null) => Promise<void>
   add: (s: Omit<Somatorio, "id" | "createdAt" | "updatedAt">) => Promise<string | null>
@@ -22,6 +23,7 @@ interface SomatoriosState {
   remove: (id: string) => Promise<void>
   getForWorkspace: (workspaceId: string | null) => Somatorio[]
 }
+
 
 function rowToSomatorio(r: any): Somatorio {
   return {
