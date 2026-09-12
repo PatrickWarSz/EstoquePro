@@ -21,7 +21,9 @@ export default function SomatoriosPage() {
   const remove = useSomatoriosStore((s) => s.remove)
   const load = useSomatoriosStore((s) => s.load)
   const loading = useSomatoriosStore((s) => s.loading)
+  const error = useSomatoriosStore((s) => s.error)
   const loadedWorkspaceId = useSomatoriosStore((s) => s.loadedWorkspaceId)
+
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<Somatorio | null>(null)
