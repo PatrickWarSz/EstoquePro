@@ -60,6 +60,9 @@ export interface StockState {
   orders: Order[];
   locations: StockLocation[];
   loading: boolean;
+  syncError: string | null;
+  lastSyncedAt: string | null;
+
   clientId: string | null;
   cacheWorkspaceId?: string | null;
   cacheUserId?: string | null;
