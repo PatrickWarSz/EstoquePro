@@ -49,6 +49,34 @@ export default function AppLayout() {
     };
     window.addEventListener('online', onOnline);
 
+    // Celulares congelam timers quando o app fica em segundo plano: ao voltar
+    // para a tela, busca os dados novos imediatamente.
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+      initialize();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+
+    // Atualização em tempo real: qualquer mudança feita em outro aparelho
+    // recarrega os dados aqui na hora.
+    let unsubRealtime: (() => void) | undefined;
+    (async () => {
+      const { supabase } = await import('@/lib/supabase');
+      let timer: any = null;
+      const bump = () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => initialize(), 600);
+      };
+      const channel = supabase.channel(`ws-${workspaceId}`);
+      ['produtos', 'categorias', 'pedidos', 'entregas_pedido', 'movimentacoes', 'aliases_qr', 'locais_estoque'].forEach((table) => {
+        channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `workspace_id=eq.${workspaceId}` }, bump);
+      });
+      channel.subscribe();
+      unsubRealtime = () => { if (timer) clearTimeout(timer); supabase.removeChannel(channel); };
+    })();
+
     // Re-inicializa quando o token do Supabase é refrescado ou um novo sign-in acontece
     let unsub: (() => void) | undefined;
     (async () => {
@@ -64,6 +92,9 @@ export default function AppLayout() {
     return () => {
       clearInterval(interval);
       window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+      if (unsubRealtime) unsubRealtime();
       if (unsub) unsub();
     };
   }, [workspaceId, currentUserId]);

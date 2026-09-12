@@ -188,6 +188,21 @@ supabase.from('produtos').select('*').eq('workspace_id', workspaceId).is('delete
             supabase.from('aliases_qr').select('*').eq('workspace_id', workspaceId)
           ]);
 
+          // Se alguma consulta essencial falhou (RLS/token/rede), NÃO sobrescreve o
+          // que já está em cache — caso contrário a tela fica em branco.
+          if (catRes.error || prodRes.error) {
+            console.warn('[initialize] consulta falhou — preservando cache local', catRes.error || prodRes.error);
+            set({ loading: false });
+            return;
+          }
+          // Workspace sem nenhuma categoria retornada apesar de já termos cache do
+          // mesmo workspace = provável bloqueio de leitura; preserva o cache.
+          if ((catRes.data || []).length === 0 && get().categories.length > 0 && get().cacheWorkspaceId === workspaceId) {
+            console.warn('[initialize] retorno vazio inesperado — preservando cache local');
+            set({ loading: false });
+            return;
+          }
+
           const suppliers = (supRes.data || []).map(f => ({ id: f.id, name: f.nome, contact: f.contato || '', phone: f.telefone || '', email: f.email || '', notes: f.observacao || '', cnpj: f.cnpj || '' }));
           const locations = (locRes.data || []).map(l => ({ id: l.id, name: l.nome, description: l.descricao || '', itemRefs: l.item_refs ? JSON.parse(l.item_refs) : [] }));
           const qrAliases: Record<string, QrAlias> = {};
