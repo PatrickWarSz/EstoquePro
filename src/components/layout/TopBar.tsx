@@ -24,6 +24,8 @@ import { NotificationsButton } from "@/components/notifications/NotificationsBut
 export function TopBar() {
   const { theme, setTheme } = useTheme();
   const { categories } = useStockStore();
+  const syncError = useStockStore((s) => s.syncError);
+
   const currentUserId = useAuthStore((s) => s.currentUserId);
   const getCurrentUser = useAuthStore((s) => s.getCurrentUser);
   const user = getCurrentUser();
