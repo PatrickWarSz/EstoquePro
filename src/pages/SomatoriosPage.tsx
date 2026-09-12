@@ -91,7 +91,24 @@ export default function SomatoriosPage() {
         </Button>
       </div>
 
-      {somatorios.length === 0 ? (
+      {error ? (
+        <Card className="flex flex-col items-center justify-center gap-3 p-10 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+            <AlertTriangle className="h-6 w-6 text-destructive" />
+          </div>
+          <div>
+            <p className="font-medium">Não foi possível carregar</p>
+            <p className="text-sm text-muted-foreground">{error}</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => load(workspaceId)}>
+            Tentar novamente
+          </Button>
+        </Card>
+      ) : loading && somatorios.length === 0 ? (
+        <Card className="flex items-center justify-center p-10 text-sm text-muted-foreground">
+          Carregando somatórios...
+        </Card>
+      ) : somatorios.length === 0 ? (
         <Card className="flex flex-col items-center justify-center gap-3 p-10 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <Sigma className="h-6 w-6 text-muted-foreground" />
@@ -107,6 +124,7 @@ export default function SomatoriosPage() {
           </Button>
         </Card>
       ) : (
+
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {somatorios.map((s) => {
             const refs = s.itemRefs
