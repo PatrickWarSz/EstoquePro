@@ -29,6 +29,21 @@ export default function SomatoriosPage() {
   // Carrega/recarrega sempre que o workspace mudar ou ao abrir a página
   useEffect(() => {
     load(workspaceId)
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return
+      if (typeof navigator !== "undefined" && !navigator.onLine) return
+      load(workspaceId)
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    window.addEventListener("focus", onVisible)
+    const interval = setInterval(() => {
+      if (typeof navigator === "undefined" || navigator.onLine) load(workspaceId)
+    }, 60000)
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible)
+      window.removeEventListener("focus", onVisible)
+      clearInterval(interval)
+    }
   }, [workspaceId, load])
 
   const somatorios = useMemo(
