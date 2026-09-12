@@ -269,8 +269,11 @@ categories = sortedCats.map(cat => ({
             qrAliases, 
             selectedCategoryId: nextSelected, 
             loading: false,
+            syncError: null,
+            lastSyncedAt: new Date().toISOString(),
             cacheWorkspaceId: workspaceId,
             cacheUserId: currentUserId,
+
             suppliersCursor: supRes.data && supRes.data.length > 0 ? supRes.data[supRes.data.length - 1].criado_em : null,
             suppliersHasMore: (supRes.data || []).length === 30,
             ordersCursor: pedRes.data && pedRes.data.length > 0 ? pedRes.data[pedRes.data.length - 1].criado_em : null,
