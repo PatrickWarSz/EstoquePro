@@ -196,7 +196,8 @@ supabase.from('produtos').select('*').eq('workspace_id', workspaceId).is('delete
           // mesmo workspace = provável bloqueio de leitura; preserva o cache.
           if ((catRes.data || []).length === 0 && get().categories.length > 0 && get().cacheWorkspaceId === workspaceId) {
             console.warn('[initialize] retorno vazio inesperado — preservando cache local');
-            set({ loading: false });
+            set({ loading: false, syncError: 'Não foi possível atualizar os dados (leitura bloqueada).' });
+
             return;
           }
 
