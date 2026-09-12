@@ -92,6 +92,9 @@ export default function AppLayout() {
     return () => {
       clearInterval(interval);
       window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+      if (unsubRealtime) unsubRealtime();
       if (unsub) unsub();
     };
   }, [workspaceId, currentUserId]);
