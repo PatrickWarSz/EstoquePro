@@ -1,34 +1,30 @@
-# Ativar Realtime das tabelas do estoque
+# Somatórios em branco no celular — diagnosticar e corrigir
 
-## Contexto
-O app já escuta eventos de realtime (canal no AppLayout), mas as tabelas ainda não estão publicadas no Supabase. Sem isso, as telas só atualizam ao recarregar/voltar ao app — foi por isso que o produto novo não apareceu no celular.
+## Situação
+No notebook o somatório aparece; no celular a tela mostra "Nenhum somatório criado". A causa ainda não está confirmada: hoje, quando a leitura falha (permissão, sessão antiga, erro de rede), o app simplesmente mostra a lista vazia, sem nenhum aviso. Por isso não dá para saber, olhando a tela, se realmente não existe nada ou se a busca falhou.
 
-## Opção 1 — Painel (manual)
-1. Supabase Dashboard → barra lateral → **Database → Publications**
-2. Abrir **supabase_realtime**
-3. Em "Tables", adicionar:
-   - produtos
-   - categorias
-   - pedidos
-   - entregas_pedido
-   - movimentacoes
-   - aliases_qr
-   - locais_estoque
+Também existe a possibilidade de o celular estar com uma sessão/empresa antiga guardada, buscando os somatórios da conta errada.
 
-## Opção 2 — SQL Editor (copiar e rodar)
-```sql
-alter publication supabase_realtime add table public.produtos;
-alter publication supabase_realtime add table public.categorias;
-alter publication supabase_realtime add table public.pedidos;
-alter publication supabase_realtime add table public.entregas_pedido;
-alter publication supabase_realtime add table public.movimentacoes;
-alter publication supabase_realtime add table public.aliases_qr;
-alter publication supabase_realtime add table public.locais_estoque;
-```
+## Passo 1 — Tornar a falha visível (feito primeiro)
+- Na aba Somatórios, separar três estados: carregando, erro na busca, e realmente vazio.
+- Quando a busca falhar, mostrar um aviso com o motivo e um botão "Tentar novamente" em vez da tela de "Nenhum somatório criado".
+- Mostrar discretamente, só quando houver erro, a identificação da empresa que o aparelho está usando — assim conseguimos comparar celular x notebook.
+
+## Passo 2 — Corrigir o que o Passo 1 revelar
+Com o aviso na tela, o celular vai dizer qual é o problema. As correções previstas conforme o caso:
+- **Empresa diferente no celular**: forçar a atualização dos dados da conta ao abrir o app e limpar a informação antiga guardada no aparelho.
+- **Permissão negada na tabela**: ajustar a regra de acesso para que qualquer usuário da mesma empresa possa ler os somatórios (hoje pode estar restrita).
+- **Falha de rede/caminho alternativo**: o app já tem um caminho reserva pelo servidor; garantir que ele seja usado e que o erro dele também apareça na tela.
+
+## Passo 3 — Guardar para uso offline
+Guardar os somatórios no próprio aparelho depois da primeira leitura bem-sucedida, como já é feito com o estoque, para que a tela nunca fique vazia por causa de uma falha momentânea de rede.
+
+## Detalhes técnicos
+- `src/lib/somatorios-store.ts`: adicionar campo `error` ao estado; hoje `load()` engole o erro após o fallback e deixa a lista vazia. Persistir o último resultado bem-sucedido (localStorage, por workspace).
+- `src/pages/SomatoriosPage.tsx`: renderizar estados `loading` / `error` / `empty` distintos, com retry.
+- `supabase/functions/workspace-data/index.ts`: já cobre `somatorios_list` com service_role; validar que está deployada e que o CORS aceita a origem usada no celular (PWA envia origin `https://estoque.vexodev.com.br`).
+- Conferir no Supabase a policy de SELECT em `public.somatorios` e o `GRANT SELECT ... TO authenticated`.
 
 ## Verificação
-- Após rodar, confirmar em Database → Publications → supabase_realtime que as 7 tabelas aparecem na lista.
-- Teste: criar um produto no notebook e confirmar que aparece no celular sem dar F5.
-
-## Observação
-Nenhuma mudança de código é necessária no app — apenas configuração no Supabase. Este plano é só para registrar a orientação; a execução é manual por você.
+- Abrir Somatórios no celular e confirmar: ou a lista aparece, ou surge uma mensagem clara de erro (nunca mais a tela vazia enganosa).
+- Criar um somatório no notebook e conferir que aparece no celular após reabrir o app.
