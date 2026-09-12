@@ -124,6 +124,9 @@ export const useStockStore = create<StockState>()(
       orders: [],
       locations: [],
       loading: false,
+      syncError: null,
+      lastSyncedAt: null,
+
       clientId: 'local-user',
       cacheWorkspaceId: null,
       cacheUserId: null,
