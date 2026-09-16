@@ -46,7 +46,11 @@ function matchesScope(op: QueuedOp, scope?: QueueScope): boolean {
   if (scope.workspaceId && op.workspaceId !== scope.workspaceId) return false;
   if (scope.ownerUserId) {
     if (op.ownerUserId) return op.ownerUserId === scope.ownerUserId;
-    return scope.includeLegacy === true;
+    // Operação sem dono identificado (ex.: ficou órfã por uma falha de sessão
+    // no momento em que foi enfileirada) nunca deve ficar invisível — ela não
+    // pertence a "outro usuário", então sempre aparece/sincroniza pra quem
+    // estiver usando este workspace neste aparelho.
+    return true;
   }
   return true;
 }

@@ -661,12 +661,19 @@ export const useAuthStore = create<AuthState>()(
 // + fallback de 60s para tabs em background sem WebSocket ativo
 const checkAccess = async () => {
   try {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return
     const { data, error } = await supabase
       .from('usuarios')
       .select('ativo')
       .eq('id', userId)
       .single();
-    if (error || !data?.ativo) {
+    if (error) {
+      // Não sabemos se o acesso foi revogado ou se é só uma falha de
+      // rede/sessão temporária — nunca desloga nesse caso, só registra.
+      console.warn('Healthcheck de acesso falhou (rede/sessão) — mantendo sessão local:', error);
+      return;
+    }
+    if (!data?.ativo) {
       toast.error('Seu acesso foi revogado. Faça login novamente.');
       get().logout();
     }

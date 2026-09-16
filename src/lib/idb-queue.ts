@@ -45,7 +45,9 @@ export async function getPendingMovements(scope?: { workspaceId?: string | null;
     if (scope.workspaceId && item.workspaceId !== scope.workspaceId) return false
     if (scope.ownerUserId) {
       if (item.ownerUserId) return item.ownerUserId === scope.ownerUserId
-      return scope.includeLegacy === true
+      // Movimentação sem dono identificado nunca fica invisível — não
+      // pertence a "outro usuário", só ficou órfã por uma falha de sessão.
+      return true
     }
     return true
   })
