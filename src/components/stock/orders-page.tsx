@@ -193,6 +193,235 @@ export function OrdersPage() {
       .sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime())
   }, [orders, filterStatus, filterSupplier, search, suppliers])
 
+  // ── grouping (only used when no single-status filter is active) ────────────
+  const groupedView = filterStatus === "all"
+  const incomingOrders = useMemo(
+    () =>
+      filtered
+        .filter((o) => o.deliveryStatus === "Entrega Incompleta")
+        .sort((a, b) => {
+          const aLate = getDeadlineStatus(a.expectedDate, a.deliveryDate) === "Pedido Atrasado"
+          const bLate = getDeadlineStatus(b.expectedDate, b.deliveryDate) === "Pedido Atrasado"
+          if (aLate !== bLate) return aLate ? -1 : 1
+          return new Date(a.expectedDate || 0).getTime() - new Date(b.expectedDate || 0).getTime()
+        }),
+    [filtered]
+  )
+  const completedOrders = useMemo(
+    () =>
+      filtered
+        .filter((o) => o.deliveryStatus !== "Entrega Incompleta")
+        .sort(
+          (a, b) =>
+            new Date(b.deliveryDate || b.orderDate).getTime() -
+            new Date(a.deliveryDate || a.orderDate).getTime()
+        ),
+    [filtered]
+  )
+
+  function renderOrderCard(order: Order) {
+    const supplier = suppliers.find((s) => s.id === order.supplierId)
+    const quantityOrdered = order.quantityOrdered ?? 0
+    const quantityDelivered = order.quantityDelivered ?? 0
+    const pricePerUnit = order.pricePerUnit ?? 0
+    const orderUnit = order.unit ||
+      categories.find((c) => c.id === order.linkedCategoryId)
+        ?.items.find((i) => i.id === order.linkedItemId)?.unit ||
+      "kg"
+    const toDeliver = quantityOrdered - quantityDelivered
+    const deadlineStatus = getDeadlineStatus(order.expectedDate, order.deliveryDate)
+    const totalValue =
+      quantityDelivered * pricePerUnit ||
+      quantityOrdered * pricePerUnit
+    const linkedCat = categories.find(
+      (c) => c.id === order.linkedCategoryId
+    )
+    const linkedItem = linkedCat?.items.find(
+      (i) => i.id === order.linkedItemId
+    )
+
+    return (
+      <Card
+        key={order.id}
+        className={cn(
+          "p-4 py-3 transition-colors",
+          deadlineStatus === "Pedido Atrasado" &&
+            order.deliveryStatus === "Entrega Incompleta" &&
+            "border-destructive/30 bg-destructive/[0.02]"
+        )}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          {/* Left info */}
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-sm truncate">
+                {order.productDescription}
+              </span>
+              {deadlineBadge(deadlineStatus)}
+              {deliveryBadge(order.deliveryStatus)}
+              {order.stockEntryCreated && (
+                <Badge variant="outline" className="border-success/30 bg-success/10 text-success text-xs gap-1">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Entrada lançada
+                </Badge>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+              <span>
+                <strong>Fornecedor:</strong>{" "}
+                {supplier?.name || "—"}
+              </span>
+              <span>
+                <strong>Pedido:</strong> {fmtDate(order.orderDate)}
+              </span>
+              <span>
+                <strong>Prev.:</strong> {fmtDate(order.expectedDate)}
+              </span>
+              {order.deliveryDate && (
+                <span>
+                  <strong>Entrega:</strong>{" "}
+                  {fmtDate(order.deliveryDate)}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+              <span>
+                <strong>Pedido:</strong>{" "}
+                {quantityOrdered.toLocaleString("pt-BR")} {orderUnit}
+              </span>
+              <span>
+                <strong>Entregue:</strong>{" "}
+                {quantityDelivered.toLocaleString("pt-BR")} {orderUnit}
+              </span>
+              {toDeliver > 0 && (
+                <span className="text-warning font-medium">
+                  Falta: {toDeliver.toLocaleString("pt-BR")} {orderUnit}
+                </span>
+              )}
+              {order.stockEntryQuantity !== undefined &&
+                order.stockEntryQuantity > 0 && (
+                  <span>
+                    <strong>Entrada estoque:</strong>{" "}
+                    {order.stockEntryQuantity} {linkedItem?.unit || "un"}
+                  </span>
+                )}
+              <span>
+                <strong>Preço/{orderUnit}:</strong>{" "}
+                {pricePerUnit.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 4,
+                })}
+              </span>
+              <span>
+                <strong>Total:</strong> {fmtCurrency(totalValue)}
+              </span>
+            </div>
+            {linkedItem && (
+              <p className="text-xs text-muted-foreground">
+                <strong>Item no estoque:</strong> {linkedCat?.name} →{" "}
+                {linkedItem.name}
+              </p>
+            )}
+            {order.notes && (
+              <p className="text-xs text-muted-foreground italic">
+                {order.notes}
+              </p>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+            {order.deliveryStatus !== "Entrega Completa" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 text-xs border-success/40 text-success hover:bg-success/10"
+                onClick={() => setDeliveryOpen(order)}
+              >
+                <Truck className="h-3.5 w-3.5" />
+                Registrar Entrega
+              </Button>
+            )}
+            {order.deliveryStatus === "Entrega Incompleta" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 text-xs border-blue-500/40 text-blue-600 hover:bg-blue-500/10"
+                onClick={() => {
+                  finalizeOrder(order.id)
+                  toast.success("Pedido finalizado")
+                }}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Finalizar Pedido
+              </Button>
+            )}
+            {order.deliveryDate && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 text-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+                onClick={() => setEditDeliveryOpen(order)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Editar Entrega
+              </Button>
+            )}
+            {order.deliveries && order.deliveries.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 text-xs border-purple-500/40 text-purple-600 hover:bg-purple-500/10"
+                onClick={() => setDeliveryHistoryOpen(order)}
+              >
+                <Clock className="h-3.5 w-3.5" />
+                Histórico
+              </Button>
+            )}
+            {order.stockEntryCreated && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 text-xs border-green-600/40 text-green-600 hover:bg-green-500/10"
+                onClick={() => {
+                  const supplier = suppliers.find((s) => s.id === order.supplierId)
+                  const linkedItem = categories
+                    .find((c) => c.id === order.linkedCategoryId)
+                    ?.items.find((i) => i.id === order.linkedItemId)
+                  const message = generateDeliveryMessage(
+                    order,
+                    supplier?.name || "Desconhecido",
+                    linkedItem?.unit
+                  )
+                  openWhatsAppWeb(message)
+                }}
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                WhatsApp
+              </Button>
+            )}
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              onClick={() => setEditOpen(order)}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 text-destructive hover:text-destructive"
+              onClick={() => setDeleteConfirm(order)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      </Card>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -289,210 +518,40 @@ export function OrdersPage() {
           <PackageCheck className="h-10 w-10 opacity-30" />
           <p className="text-sm">Nenhum pedido encontrado</p>
         </Card>
+      ) : groupedView ? (
+        <div className="space-y-6">
+          {incomingOrders.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Truck className="h-4 w-4 text-warning" />
+                <h3 className="text-sm font-semibold">A caminho</h3>
+                <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning text-xs">
+                  {incomingOrders.length}
+                </Badge>
+              </div>
+              <div className="space-y-3">
+                {incomingOrders.map((order) => renderOrderCard(order))}
+              </div>
+            </div>
+          )}
+          {completedOrders.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-success" />
+                <h3 className="text-sm font-semibold">Concluídos</h3>
+                <Badge variant="outline" className="border-success/30 bg-success/10 text-success text-xs">
+                  {completedOrders.length}
+                </Badge>
+              </div>
+              <div className="space-y-3">
+                {completedOrders.map((order) => renderOrderCard(order))}
+              </div>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((order) => {
-            const supplier = suppliers.find((s) => s.id === order.supplierId)
-            const quantityOrdered = order.quantityOrdered ?? 0
-            const quantityDelivered = order.quantityDelivered ?? 0
-            const pricePerUnit = order.pricePerUnit ?? 0
-            const orderUnit = order.unit ||
-              categories.find((c) => c.id === order.linkedCategoryId)
-                ?.items.find((i) => i.id === order.linkedItemId)?.unit ||
-              "kg"
-            const toDeliver = quantityOrdered - quantityDelivered
-            const deadlineStatus = getDeadlineStatus(order.expectedDate, order.deliveryDate)
-            const totalValue =
-              quantityDelivered * pricePerUnit ||
-              quantityOrdered * pricePerUnit
-            const linkedCat = categories.find(
-              (c) => c.id === order.linkedCategoryId
-            )
-            const linkedItem = linkedCat?.items.find(
-              (i) => i.id === order.linkedItemId
-            )
-
-            return (
-              <Card
-                key={order.id}
-                className={cn(
-                  "p-4 py-3 transition-colors",
-                  deadlineStatus === "Pedido Atrasado" &&
-                    order.deliveryStatus === "Entrega Incompleta" &&
-                    "border-destructive/30 bg-destructive/[0.02]"
-                )}
-              >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  {/* Left info */}
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-sm truncate">
-                        {order.productDescription}
-                      </span>
-                      {deadlineBadge(deadlineStatus)}
-                      {deliveryBadge(order.deliveryStatus)}
-                      {order.stockEntryCreated && (
-                        <Badge variant="outline" className="border-success/30 bg-success/10 text-success text-xs gap-1">
-                          <CheckCircle2 className="h-3 w-3" />
-                          Entrada lançada
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                      <span>
-                        <strong>Fornecedor:</strong>{" "}
-                        {supplier?.name || "—"}
-                      </span>
-                      <span>
-                        <strong>Pedido:</strong> {fmtDate(order.orderDate)}
-                      </span>
-                      <span>
-                        <strong>Prev.:</strong> {fmtDate(order.expectedDate)}
-                      </span>
-                      {order.deliveryDate && (
-                        <span>
-                          <strong>Entrega:</strong>{" "}
-                          {fmtDate(order.deliveryDate)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                      <span>
-                        <strong>Pedido:</strong>{" "}
-                        {quantityOrdered.toLocaleString("pt-BR")} {orderUnit}
-                      </span>
-                      <span>
-                        <strong>Entregue:</strong>{" "}
-                        {quantityDelivered.toLocaleString("pt-BR")} {orderUnit}
-                      </span>
-                      {toDeliver > 0 && (
-                        <span className="text-warning font-medium">
-                          Falta: {toDeliver.toLocaleString("pt-BR")} {orderUnit}
-                        </span>
-                      )}
-                      {order.stockEntryQuantity !== undefined &&
-                        order.stockEntryQuantity > 0 && (
-                          <span>
-                            <strong>Entrada estoque:</strong>{" "}
-                            {order.stockEntryQuantity} {linkedItem?.unit || "un"}
-                          </span>
-                        )}
-                      <span>
-                        <strong>Preço/{orderUnit}:</strong>{" "}
-                        {pricePerUnit.toLocaleString("pt-BR", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 4,
-                        })}
-                      </span>
-                      <span>
-                        <strong>Total:</strong> {fmtCurrency(totalValue)}
-                      </span>
-                    </div>
-                    {linkedItem && (
-                      <p className="text-xs text-muted-foreground">
-                        <strong>Item no estoque:</strong> {linkedCat?.name} →{" "}
-                        {linkedItem.name}
-                      </p>
-                    )}
-                    {order.notes && (
-                      <p className="text-xs text-muted-foreground italic">
-                        {order.notes}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-                    {order.deliveryStatus !== "Entrega Completa" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 gap-1.5 text-xs border-success/40 text-success hover:bg-success/10"
-                        onClick={() => setDeliveryOpen(order)}
-                      >
-                        <Truck className="h-3.5 w-3.5" />
-                        Registrar Entrega
-                      </Button>
-                    )}
-                    {order.deliveryStatus === "Entrega Incompleta" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 gap-1.5 text-xs border-blue-500/40 text-blue-600 hover:bg-blue-500/10"
-                        onClick={() => {
-                          finalizeOrder(order.id)
-                          toast.success("Pedido finalizado")
-                        }}
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Finalizar Pedido
-                      </Button>
-                    )}
-                    {order.deliveryDate && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 gap-1.5 text-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
-                        onClick={() => setEditDeliveryOpen(order)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        Editar Entrega
-                      </Button>
-                    )}
-                    {order.deliveries && order.deliveries.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 gap-1.5 text-xs border-purple-500/40 text-purple-600 hover:bg-purple-500/10"
-                        onClick={() => setDeliveryHistoryOpen(order)}
-                      >
-                        <Clock className="h-3.5 w-3.5" />
-                        Histórico
-                      </Button>
-                    )}
-                    {order.stockEntryCreated && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 gap-1.5 text-xs border-green-600/40 text-green-600 hover:bg-green-500/10"
-                        onClick={() => {
-                          const supplier = suppliers.find((s) => s.id === order.supplierId)
-                          const linkedItem = categories
-                            .find((c) => c.id === order.linkedCategoryId)
-                            ?.items.find((i) => i.id === order.linkedItemId)
-                          const message = generateDeliveryMessage(
-                            order,
-                            supplier?.name || "Desconhecido",
-                            linkedItem?.unit
-                          )
-                          openWhatsAppWeb(message)
-                        }}
-                      >
-                        <MessageCircle className="h-3.5 w-3.5" />
-                        WhatsApp
-                      </Button>
-                    )}
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      onClick={() => setEditOpen(order)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => setDeleteConfirm(order)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            )
-          })}
+          {filtered.map((order) => renderOrderCard(order))}
         </div>
       )}
       {ordersHasMore && filtered.length > 0 && (
