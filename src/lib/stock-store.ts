@@ -98,6 +98,7 @@ export interface StockState {
   registerDelivery: (p: any) => Promise<void>;
   updateDelivery: (p: any) => Promise<void>;
   finalizeOrder: (id: string) => Promise<void>;
+  revertOrder: (id: string) => Promise<void>;
   addLocation: (l: any) => Promise<string>;
   updateLocation: (id: string, up: any) => Promise<void>;
   removeLocation: (id: string) => Promise<void>;
@@ -857,6 +858,34 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
         }
       },
 
+      // Reverte um pedido Concluído (Completo/Excedente) de volta para "Em andamento"
+      // (Entrega Incompleta). Só troca o status — NÃO mexe nas entregas já
+      // registradas, nem desfaz entradas de estoque já lançadas. Seguro para o banco:
+      // é a mesma coluna que finalizeOrder altera, apenas com o valor recalculado
+      // a partir das quantidades já existentes.
+      revertOrder: async (id) => {
+        const wId = useAuthStore.getState().workspaceId;
+        const order = get().orders.find(o => o.id === id);
+        if (!order) return;
+
+        set((s) => ({
+          orders: s.orders.map(o => o.id !== id ? o : ({ ...o, deliveryStatus: 'Entrega Incompleta' as any }))
+        }) as any);
+
+        if (isOffline() || isTempId(id)) {
+          await enqueueOp({ type: 'order.revert', payload: { id, workspace_id: wId }, workspaceId: wId!, refFields: ['id'] });
+          return;
+        }
+
+        const { supabase } = await import('./supabase');
+        try {
+          await supabase.from('pedidos').update({ status_entrega: 'Entrega Incompleta' }).eq('id', id).eq('workspace_id', wId);
+          await get().initialize();
+        } catch {
+          await enqueueOp({ type: 'order.revert', payload: { id, workspace_id: wId }, workspaceId: wId!, refFields: ['id'] });
+        }
+      },
+
       addLocation: async (l) => {
         const { supabase } = await import('./supabase');
         const { data } = await supabase.from('locais_estoque').insert([{ workspace_id: useAuthStore.getState().workspaceId, nome: l.name, descricao: l.description, item_refs: JSON.stringify(l.itemRefs || []) }]).select();
@@ -983,6 +1012,10 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
           },
           'order.finalize': async (p) => {
             const { error } = await supabase.from('pedidos').update({ status_entrega: 'Entrega Completa' }).eq('id', p.id).eq('workspace_id', p.workspace_id);
+            if (error) throw error;
+          },
+          'order.revert': async (p) => {
+            const { error } = await supabase.from('pedidos').update({ status_entrega: 'Entrega Incompleta' }).eq('id', p.id).eq('workspace_id', p.workspace_id);
             if (error) throw error;
           },
           'delivery.register': async (p) => {

@@ -16,6 +16,7 @@ export type OpType =
   | "order.update"
   | "order.remove"
   | "order.finalize"
+  | "order.revert"
   | "delivery.register"
   | "delivery.update"
   | "item.add"

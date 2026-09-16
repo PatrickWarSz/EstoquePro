@@ -13,6 +13,7 @@ import {
   Trash2,
   X,
   MessageCircle,
+  Undo2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -145,7 +146,7 @@ function deliveryBadge(status: Order["deliveryStatus"]) {
 type FilterStatus = "all" | "pending" | "late" | "done"
 
 export function OrdersPage() {
-  const { suppliers, orders, categories, addOrder, updateOrder, removeOrder, registerDelivery, updateDelivery, finalizeOrder, fetchMoreOrders, ordersHasMore } =
+  const { suppliers, orders, categories, addOrder, updateOrder, removeOrder, registerDelivery, updateDelivery, finalizeOrder, revertOrder, fetchMoreOrders, ordersHasMore } =
     useStockStore() as StockState
 
   const [search, setSearch] = useState("")
@@ -160,6 +161,7 @@ export function OrdersPage() {
   const [generalHistoryOpen, setGeneralHistoryOpen] = useState(false)
   const [editOpen, setEditOpen] = useState<Order | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<Order | null>(null)
+  const [revertConfirm, setRevertConfirm] = useState<Order | null>(null)
 
   // ── stats ──────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -240,6 +242,17 @@ export function OrdersPage() {
       (i) => i.id === order.linkedItemId
     )
 
+    // Estado do pedido — eixo separado de "completude da entrega":
+    // - aberto: nenhuma entrega registrada ainda (editar dados do pedido em si)
+    // - em_andamento: já tem entrega(s) parcial(is), mas não foi finalizado
+    // - concluido: finalizado (Completa/Excedente) — só ações pós-fechamento
+    const orderLifecycle: "aberto" | "em_andamento" | "concluido" =
+      order.deliveryStatus !== "Entrega Incompleta"
+        ? "concluido"
+        : quantityDelivered > 0
+        ? "em_andamento"
+        : "aberto"
+
     return (
       <Card
         key={order.id}
@@ -257,11 +270,12 @@ export function OrdersPage() {
               <span className="font-semibold text-sm truncate">
                 {order.productDescription}
               </span>
+              {/* 1º Prazo · 2º Completude · 3º selo neutro de estoque (eixos separados, nesta ordem) */}
               {deadlineBadge(deadlineStatus)}
               {deliveryBadge(order.deliveryStatus)}
               {order.stockEntryCreated && (
-                <Badge variant="outline" className="border-success/30 bg-success/10 text-success text-xs gap-1">
-                  <CheckCircle2 className="h-3 w-3" />
+                <Badge variant="outline" className="border-muted-foreground/30 bg-muted/50 text-muted-foreground text-xs gap-1">
+                  <PackageCheck className="h-3 w-3" />
                   Entrada lançada
                 </Badge>
               )}
@@ -329,93 +343,141 @@ export function OrdersPage() {
             )}
           </div>
 
-          {/* Actions */}
+          {/* Actions — variam por estado do pedido (Aberto / Em andamento / Concluído).
+              Cada estado mostra só as ações que fazem sentido nele, evitando o
+              "Editar o quê, quando?" de antes. */}
           <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-            {order.deliveryStatus !== "Entrega Completa" && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 gap-1.5 text-xs border-success/40 text-success hover:bg-success/10"
-                onClick={() => setDeliveryOpen(order)}
-              >
-                <Truck className="h-3.5 w-3.5" />
-                Registrar Entrega
-              </Button>
+            {orderLifecycle === "concluido" ? (
+              <>
+                {order.stockEntryCreated && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5 text-xs border-green-600/40 text-green-600 hover:bg-green-500/10"
+                    onClick={() => {
+                      const supplier = suppliers.find((s) => s.id === order.supplierId)
+                      const linkedCat = categories.find((c) => c.id === order.linkedCategoryId)
+                      const linkedItem = linkedCat?.items.find((i) => i.id === order.linkedItemId)
+                      const linkedItemLabel = linkedItem
+                        ? `${linkedCat?.name} → ${linkedItem.name}`
+                        : undefined
+                      const message = generateDeliveryMessage(
+                        order,
+                        supplier?.name || "Desconhecido",
+                        linkedItem?.unit,
+                        linkedItemLabel
+                      )
+                      openWhatsAppWeb(message)
+                    }}
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    WhatsApp
+                  </Button>
+                )}
+                {order.deliveries && order.deliveries.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5 text-xs border-purple-500/40 text-purple-600 hover:bg-purple-500/10"
+                    onClick={() => setDeliveryHistoryOpen(order)}
+                  >
+                    <Clock className="h-3.5 w-3.5" />
+                    Histórico
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs border-muted-foreground/30 text-muted-foreground hover:bg-muted"
+                  onClick={() => setRevertConfirm(order)}
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                  Reverter
+                </Button>
+              </>
+            ) : orderLifecycle === "em_andamento" ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs border-success/40 text-success hover:bg-success/10"
+                  onClick={() => setDeliveryOpen(order)}
+                >
+                  <Truck className="h-3.5 w-3.5" />
+                  Registrar Entrega
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+                  onClick={() => setEditDeliveryOpen(order)}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Editar Entrega
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs border-blue-500/40 text-blue-600 hover:bg-blue-500/10"
+                  onClick={() => {
+                    finalizeOrder(order.id)
+                    toast.success("Pedido finalizado")
+                  }}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Finalizar Pedido
+                </Button>
+                {order.deliveries && order.deliveries.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5 text-xs border-purple-500/40 text-purple-600 hover:bg-purple-500/10"
+                    onClick={() => setDeliveryHistoryOpen(order)}
+                  >
+                    <Clock className="h-3.5 w-3.5" />
+                    Histórico
+                  </Button>
+                )}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  onClick={() => setDeleteConfirm(order)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            ) : (
+              <>
+                {/* Aberto: nenhuma entrega registrada ainda */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs border-success/40 text-success hover:bg-success/10"
+                  onClick={() => setDeliveryOpen(order)}
+                >
+                  <Truck className="h-3.5 w-3.5" />
+                  Registrar Entrega
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs"
+                  onClick={() => setEditOpen(order)}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Editar Pedido
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  onClick={() => setDeleteConfirm(order)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
             )}
-            {order.deliveryStatus === "Entrega Incompleta" && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 gap-1.5 text-xs border-blue-500/40 text-blue-600 hover:bg-blue-500/10"
-                onClick={() => {
-                  finalizeOrder(order.id)
-                  toast.success("Pedido finalizado")
-                }}
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Finalizar Pedido
-              </Button>
-            )}
-            {order.deliveryDate && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 gap-1.5 text-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
-                onClick={() => setEditDeliveryOpen(order)}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                Editar Entrega
-              </Button>
-            )}
-            {order.deliveries && order.deliveries.length > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 gap-1.5 text-xs border-purple-500/40 text-purple-600 hover:bg-purple-500/10"
-                onClick={() => setDeliveryHistoryOpen(order)}
-              >
-                <Clock className="h-3.5 w-3.5" />
-                Histórico
-              </Button>
-            )}
-            {order.stockEntryCreated && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 gap-1.5 text-xs border-green-600/40 text-green-600 hover:bg-green-500/10"
-                onClick={() => {
-                  const supplier = suppliers.find((s) => s.id === order.supplierId)
-                  const linkedItem = categories
-                    .find((c) => c.id === order.linkedCategoryId)
-                    ?.items.find((i) => i.id === order.linkedItemId)
-                  const message = generateDeliveryMessage(
-                    order,
-                    supplier?.name || "Desconhecido",
-                    linkedItem?.unit
-                  )
-                  openWhatsAppWeb(message)
-                }}
-              >
-                <MessageCircle className="h-3.5 w-3.5" />
-                WhatsApp
-              </Button>
-            )}
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8"
-              onClick={() => setEditOpen(order)}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 text-destructive hover:text-destructive"
-              onClick={() => setDeleteConfirm(order)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
           </div>
         </div>
       </Card>
@@ -652,6 +714,39 @@ export function OrdersPage() {
         orders={orders}
         suppliers={suppliers}
       />
+
+      {/* Revert confirm */}
+      <AlertDialog
+        open={!!revertConfirm}
+        onOpenChange={(v) => !v && setRevertConfirm(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reverter pedido para "Em andamento"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O pedido "{revertConfirm?.productDescription}" voltará a aparecer
+              como em andamento, liberando os botões de Registrar Entrega,
+              Editar Entrega e Finalizar Pedido novamente. As entregas já
+              registradas e as entradas já lançadas no estoque não são
+              alteradas nem duplicadas — só o status do pedido muda.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (revertConfirm) {
+                  revertOrder(revertConfirm.id)
+                  toast.success("Pedido revertido para Em andamento")
+                  setRevertConfirm(null)
+                }
+              }}
+            >
+              Reverter
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete confirm */}
       <AlertDialog

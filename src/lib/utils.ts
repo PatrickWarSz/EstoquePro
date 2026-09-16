@@ -10,6 +10,7 @@ export function generateDeliveryMessage(
   order: Order,
   supplierName: string,
   linkedItemUnit?: string,
+  linkedItemLabel?: string,
 ): string {
   const formatDate = (dateStr: string | undefined) => {
     if (!dateStr) return "—"
@@ -21,13 +22,32 @@ export function generateDeliveryMessage(
   const unit = order.unit || "kg"
   const itemUnit = linkedItemUnit || "un"
   const toDeliver = order.quantityOrdered - order.quantityDelivered
-  const status = toDeliver > 0 ? `Saldo pendente: ${toDeliver.toLocaleString("pt-BR")} ${unit}` : `Pedido entregue integralmente`
+
+  const completenessLabel = (() => {
+    switch (order.deliveryStatus) {
+      case "Entrega Completa":
+        return "✅ Completa"
+      case "Entrega Excedente":
+        return "🔵 Excedente"
+      default:
+        return "⏳ Incompleta"
+    }
+  })()
+
+  const status =
+    toDeliver > 0
+      ? `Saldo pendente: ${toDeliver.toLocaleString("pt-BR")} ${unit}`
+      : toDeliver < 0
+      ? `Excedente: ${Math.abs(toDeliver).toLocaleString("pt-BR")} ${unit} acima do pedido`
+      : `Pedido entregue integralmente`
 
   return `*REGISTRO DE ENTREGA*
 ━━━━━━━━━━━━━━━━━━━━
 *Produto:* ${order.productDescription}
 *Fornecedor:* ${supplierName}
+${linkedItemLabel ? `*Item no Estoque:* ${linkedItemLabel}` : ""}
 ━━━━━━━━━━━━━━━━━━━━
+*Status da Entrega:* ${completenessLabel}
 *Quantidade Pedida:* ${order.quantityOrdered.toLocaleString("pt-BR")} ${unit}
 *Quantidade Recebida:* ${order.quantityDelivered.toLocaleString("pt-BR")} ${unit}
 ${order.stockEntryQuantity ? `*Lançado no Estoque:* ${order.stockEntryQuantity.toLocaleString("pt-BR")} ${itemUnit}` : ""}

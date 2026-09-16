@@ -339,6 +339,7 @@ function labelOp(type: QueuedOp["type"]) {
     "order.update": "Atualizar pedido",
     "order.remove": "Remover pedido",
     "order.finalize": "Finalizar pedido",
+    "order.revert": "Reverter pedido",
     "delivery.register": "Registrar entrega",
     "delivery.update": "Atualizar entrega",
     "item.add": "Criar item",
