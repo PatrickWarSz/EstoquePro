@@ -19,7 +19,6 @@ import { countPendingMovementsFor, getPendingMovements, removePendingMovement } 
 import { countOps, listOps, removeOp, type QueuedOp } from "@/lib/op-queue";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { NotificationsButton } from "@/components/notifications/NotificationsButton";
 
 export function TopBar() {
   const { theme, setTheme } = useTheme();
@@ -84,15 +83,6 @@ export function TopBar() {
     if (queueOpen) refreshQueue();
   }, [queueOpen, workspaceId, currentUserId]);
 
-  const lowOrZero = useMemo(() => {
-    let n = 0;
-    (categories || []).forEach((c) =>
-      c.items.forEach((i) => {
-        if (i.quantity === 0 || i.quantity <= i.minQuantity) n++;
-      }),
-    );
-    return n;
-  }, [categories]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,26 +143,25 @@ export function TopBar() {
           <button
             type="button"
             onClick={() => setQueueOpen(true)}
-            className="flex items-center gap-1 rounded-full border border-destructive/40 bg-destructive/10 px-2 sm:px-3 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/15"
-            title="Sem internet — o app continua funcionando e sincroniza quando conectar"
+            className="flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-2.5 sm:px-3 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/15"
+            title="Sem internet — pode continuar trabalhando, tudo será enviado quando a internet voltar"
           >
             <WifiOff className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Offline</span>
-            {pendingCount > 0 && <span>· {pendingCount}</span>}
+            <span>Sem internet</span>
+            {pendingCount > 0 && <span className="hidden sm:inline">· {pendingCount} {pendingCount === 1 ? "registro guardado" : "registros guardados"}</span>}
+            {pendingCount > 0 && <span className="sm:hidden">· {pendingCount}</span>}
           </button>
         ) : pendingCount > 0 ? (
           <button
             type="button"
             onClick={() => setQueueOpen(true)}
-            className="flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 sm:px-3 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/15"
-            title={`${pendingCount} operação(ões) sendo sincronizada(s)`}
+            className="flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/10 px-2.5 sm:px-3 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/15"
+            title={`Enviando ${pendingCount} registro(s) feitos sem internet`}
           >
             <CloudUpload className="h-3.5 w-3.5 animate-pulse" />
-            <span>{pendingCount}</span>
+            <span>Enviando {pendingCount}</span>
           </button>
-        ) : null}
-
-        {isOnline && syncError && (
+        ) : isOnline && syncError ? (
           <button
             type="button"
             onClick={async () => {
@@ -182,27 +171,13 @@ export function TopBar() {
               } catch { /* ignore */ }
               await useStockStore.getState().initialize();
             }}
-            className="flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 sm:px-3 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/15"
-            title={`Dados desatualizados: ${syncError} — toque para reconectar`}
+            className="flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/10 px-2.5 sm:px-3 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/15"
+            title={`Não foi possível atualizar: ${syncError} — toque para tentar de novo`}
           >
             <RefreshCw className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Desatualizado</span>
+            <span>Atualizar</span>
           </button>
-        )}
-
-
-        {lowOrZero > 0 && (
-          <button
-            onClick={() => navigate("/estoque")}
-            className="flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 sm:px-3 py-1 text-xs font-medium text-warning hover:bg-warning/20 transition-colors"
-            aria-label={`${lowOrZero} alertas`}
-          >
-            <AlertTriangle className="h-3.5 w-3.5" />
-            <span>{lowOrZero}</span>
-            <span className="hidden sm:inline">{lowOrZero === 1 ? "alerta" : "alertas"}</span>
-          </button>
-        )}
-        <NotificationsButton />
+        ) : null}
         <Button
           variant="ghost"
           size="icon"

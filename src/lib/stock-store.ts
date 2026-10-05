@@ -459,11 +459,6 @@ categories = sortedCats.map(cat => ({
           throw new Error(ok ? 'PENDING_SYNC' : 'FAILED_TO_QUEUE');
         }
 
-        // Dispara verificação de alertas (baixo/zerado) — não bloqueia a operação
-        try {
-          const { triggerStockAlertCheck } = await import('./push');
-          triggerStockAlertCheck(itemId, prevQ, newQ);
-        } catch (_) {}
       },
 
       addCategory: async (cat) => {
