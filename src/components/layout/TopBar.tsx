@@ -83,15 +83,6 @@ export function TopBar() {
     if (queueOpen) refreshQueue();
   }, [queueOpen, workspaceId, currentUserId]);
 
-  const lowOrZero = useMemo(() => {
-    let n = 0;
-    (categories || []).forEach((c) =>
-      c.items.forEach((i) => {
-        if (i.quantity === 0 || i.quantity <= i.minQuantity) n++;
-      }),
-    );
-    return n;
-  }, [categories]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
