@@ -19,7 +19,6 @@ import { countPendingMovementsFor, getPendingMovements, removePendingMovement } 
 import { countOps, listOps, removeOp, type QueuedOp } from "@/lib/op-queue";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { NotificationsButton } from "@/components/notifications/NotificationsButton";
 
 export function TopBar() {
   const { theme, setTheme } = useTheme();
