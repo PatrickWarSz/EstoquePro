@@ -52,7 +52,7 @@ serve(async (req) => {
         tamanho_bytes: 0,
         status: 'erro',
         erro_msg: err.message,
-      }]).catch(() => {})
+      }])
     }
   }
 
