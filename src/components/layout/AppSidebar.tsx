@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/sidebar";
 import { useStockStore } from "@/lib/stock-store";
 import { ModuleKey, useAuthStore } from "@/lib/auth-store";
+type NavItem = { title: string; url: string; icon: any; module: ModuleKey };
+
 function EstoqueProLogo({ collapsed }: { collapsed: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
