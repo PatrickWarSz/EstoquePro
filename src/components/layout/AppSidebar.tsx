@@ -15,15 +15,11 @@ import {
 } from "@/components/ui/sidebar";
 import { useStockStore } from "@/lib/stock-store";
 import { ModuleKey, useAuthStore } from "@/lib/auth-store";
-import logoAsset from "@/assets/estoquepro-logo.png.asset.json";
-
-type NavItem = { title: string; url: string; icon: any; module: ModuleKey };
-
 function EstoqueProLogo({ collapsed }: { collapsed: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
       <img
-        src={logoAsset.url}
+        src="/pwa-192.png"
         alt="EstoquePro"
         className="h-8 w-8 shrink-0 rounded-md object-cover shadow-sm"
       />
