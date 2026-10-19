@@ -113,7 +113,9 @@ export function ConvertUnitsDialog({ open, onOpenChange, initialCategoryId, only
       if (typeof ensureSession === "function") await ensureSession()
       const auth = useAuthStore.getState() as any
       const wId = auth.workspaceId
-      const opName = auth.currentEmployee?.name || auth.employeeName || "Administrador"
+      const cu = auth.getCurrentUser?.()
+      const opName = cu?.name || "Administrador"
+      const opId = cu?.id && cu.id !== "admin" ? cu.id : null
       let ok = 0
       for (const p of parsed) {
         const { error } = await supabase.from("produtos")
@@ -123,7 +125,7 @@ export function ConvertUnitsDialog({ open, onOpenChange, initialCategoryId, only
         const note = `Conversão de unidade: de ${formatQuantity(p.item.quantity, p.item.unit)} para ${formatQuantity(p.qty, unit)}`
         await supabase.from("movimentacoes").insert([{
           workspace_id: wId, produto_id: p.item.id, tipo: "entrada", quantidade: 0,
-          novo_total: p.qty, observacao: note, nome_operador: opName, data: new Date().toISOString(),
+          novo_total: p.qty, observacao: note, operador_id: opId, nome_operador: opName, data: new Date().toISOString(),
         }])
         ok++
       }

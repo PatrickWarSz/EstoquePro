@@ -1,6 +1,6 @@
 
 import { useMemo, useState } from "react"
-import { ArrowUpCircle, ArrowDownCircle, MoreHorizontal, History, PenSquare, Trash2, GripVertical } from "lucide-react"
+import { ArrowUpCircle, ArrowRightLeft, ArrowDownCircle, MoreHorizontal, History, PenSquare, Trash2, GripVertical } from "lucide-react"
 import { useStockStore } from "@/lib/stock-store"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { MovementDialog } from "./movement-dialog"
 import { EditItemDialog } from "./edit-item-dialog"
+import { ConvertUnitsDialog } from "./convert-units-dialog"
 import { SortableList } from "@/components/ui/sortable-list"
 import { StockItem } from "@/lib/types"
 import { toast } from "sonner"
@@ -51,6 +52,7 @@ export function StockTable({ onViewHistory }: StockTableProps) {
         : [],
     [activeCategory]
   )
+  const [converting, setConverting] = useState<{ itemId: string; categoryId: string } | null>(null)
   const [selectedMaterial, setSelectedMaterial] = useState<{
     item: StockItem
     categoryId: string
@@ -174,6 +176,9 @@ export function StockTable({ onViewHistory }: StockTableProps) {
                       <DropdownMenuItem onClick={() => handleEditItem(item.id)}>
                         <PenSquare className="mr-2 h-4 w-4" /> Editar
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { const r = findItemAndCategory(item.id); if (r) setConverting({ itemId: item.id, categoryId: r.categoryId }) }}>
+                        <ArrowRightLeft className="mr-2 h-4 w-4" /> Converter unidade
+                      </DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteItem(item.id)}>
                         <Trash2 className="mr-2 h-4 w-4" /> Excluir
                       </DropdownMenuItem>
@@ -279,7 +284,10 @@ export function StockTable({ onViewHistory }: StockTableProps) {
                         <DropdownMenuItem onClick={() => handleEditItem(item.id)}>
                           <PenSquare className="mr-2 h-4 w-4" /> Editar
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteItem(item.id)}>
+                        <DropdownMenuItem onClick={() => { const r = findItemAndCategory(item.id); if (r) setConverting({ itemId: item.id, categoryId: r.categoryId }) }}>
+                        <ArrowRightLeft className="mr-2 h-4 w-4" /> Converter unidade
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteItem(item.id)}>
                           <Trash2 className="mr-2 h-4 w-4" /> Excluir
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -301,6 +309,12 @@ export function StockTable({ onViewHistory }: StockTableProps) {
           onOpenChange={setIsDialogOpen}
         />
       )}
+      <ConvertUnitsDialog
+        open={!!converting}
+        onOpenChange={(o) => { if (!o) setConverting(null) }}
+        initialCategoryId={converting?.categoryId}
+        onlyItemId={converting?.itemId}
+      />
       {editingItem && (
         <EditItemDialog
           open={!!editingItem}
