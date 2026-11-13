@@ -25,12 +25,11 @@ export function parseCount(raw: string): number | null {
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 1000) / 1000 : null
 }
 
-type Row = { key: string; catId: string; catName: string; itemId: string; name: string; qty: number; unit: string; loc: string }
+type Row = { key: string; catId: string; catName: string; itemId: string; name: string; qty: number; unit: string }
 
 export default function ConferenciaPage() {
-  const { categories, locations, applyBatchMovements } = useStockStore()
+  const { categories, applyBatchMovements } = useStockStore()
   const [catFilter, setCatFilter] = useState<Set<string>>(new Set())
-  const [locFilter, setLocFilter] = useState("")
   const [search, setSearch] = useState("")
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [showQty, setShowQty] = useState(true)
@@ -41,29 +40,22 @@ export default function ConferenciaPage() {
 
   useEffect(() => { localStorage.setItem(DRAFT_KEY, JSON.stringify(counts)) }, [counts])
 
-  const locByRef = useMemo(() => {
-    const m: Record<string, string[]> = {}
-    locations.forEach((l) => l.itemRefs.forEach((r) => (m[r] ||= []).push(l.name)))
-    return m
-  }, [locations])
 
   const rows: Row[] = useMemo(() => {
     const all: Row[] = []
     categories.forEach((c) => c.items.forEach((i) => {
       const key = `${c.id}:${i.id}`
-      all.push({ key, catId: c.id, catName: c.name, itemId: i.id, name: i.name, qty: i.quantity, unit: i.unit || c.unit || "", loc: (locByRef[key] || []).join(", ") })
+      all.push({ key, catId: c.id, catName: c.name, itemId: i.id, name: i.name, qty: i.quantity, unit: i.unit || c.unit || "" })
     }))
     return all
-  }, [categories, locByRef])
+  }, [categories])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const loc = locations.find((l) => l.id === locFilter)
     return rows.filter((r) =>
       (catFilter.size === 0 || catFilter.has(r.catId)) &&
-      (!loc || loc.itemRefs.includes(r.key)) &&
       (!q || r.name.toLowerCase().includes(q)))
-  }, [rows, catFilter, locFilter, search, locations])
+  }, [rows, catFilter, search])
 
   const toPrint = filtered.filter((r) => selected.size === 0 || selected.has(r.key))
 
@@ -77,42 +69,38 @@ export default function ConferenciaPage() {
     if (!w) return toast.error("Bloqueio de pop-up. Permita pop-ups para imprimir.")
     const now = new Date().toLocaleString("pt-BR")
     let lastCat = ""
-    const body = toPrint.map((r, idx) => {
-      const head = r.catName !== lastCat ? `<tr class="cat"><td colspan="${showQty ? 7 : 6}">${esc(r.catName)}</td></tr>` : ""
+    let n = 0
+    const body = toPrint.map((r) => {
+      const head = r.catName !== lastCat ? `<tr class="cat"><td colspan="${showQty ? 4 : 3}">${esc(r.catName)}</td></tr>` : ""
       lastCat = r.catName
+      n++
       return `${head}<tr>
-        <td class="n">${idx + 1}</td>
-        <td class="ok"><span class="box"></span></td>
-        <td class="name">${esc(r.name)}${r.loc ? `<div class="loc">Local: ${esc(r.loc)}</div>` : ""}</td>
+        <td class="n">${n}</td>
+        <td class="name">${esc(r.name)}</td>
         ${showQty ? `<td class="sys">${esc(formatQuantity(r.qty, r.unit))}</td>` : ""}
-        <td class="real"><div class="line"></div><div class="u">${esc(pluralizeUnit(2, r.unit))}</div></td>
-        <td class="dif"><div class="line"></div></td>
-        <td class="obs"><div class="line"></div></td>
+        <td class="real"><span class="u">${esc(pluralizeUnit(2, r.unit))}</span></td>
       </tr>`
     }).join("")
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Conferência de Estoque</title><style>
       @page { size: A4; margin: 12mm 10mm; }
-      *{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#000;margin:0;font-size:10pt}
-      h1{font-size:15pt;margin:0 0 2mm} .meta{display:flex;gap:8mm;margin:2mm 0 4mm;font-size:10pt}
+      *{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#000;margin:0;font-size:11pt}
+      h1{font-size:16pt;margin:0 0 3mm} .meta{display:flex;gap:8mm;margin:0 0 5mm}
       .meta span{flex:1;border-bottom:1px solid #000;padding-bottom:1mm}
-      table{width:100%;border-collapse:collapse} th,td{border:1px solid #555;padding:2.2mm 1.5mm;vertical-align:middle}
-      th{background:#e5e5e5;font-size:8.5pt;text-transform:uppercase}
+      table{width:100%;border-collapse:collapse} th,td{border:1px solid #444;padding:3mm 2mm;vertical-align:middle}
+      th{background:#e5e5e5;font-size:9pt;text-transform:uppercase;text-align:left}
       thead{display:table-header-group} tr{page-break-inside:avoid}
-      tr.cat td{background:#f0f0f0;font-weight:700;font-size:10pt}
-      .n{width:7mm;text-align:center;color:#555;font-size:8pt} .ok{width:11mm;text-align:center}
-      .box{display:inline-block;width:5.5mm;height:5.5mm;border:1.6px solid #000}
-      .name{font-weight:600;word-break:break-word} .loc{font-weight:400;font-size:8pt;color:#444}
-      .sys{width:26mm;text-align:right;font-weight:700;white-space:nowrap}
-      .real{width:30mm} .dif{width:18mm} .obs{width:34mm}
-      .line{height:6mm} .u{font-size:7pt;color:#555;text-align:right}
-      .foot{margin-top:8mm;display:flex;gap:12mm} .foot span{flex:1;border-top:1px solid #000;padding-top:1mm;text-align:center;font-size:9pt}
+      tr.cat td{background:#d9d9d9;font-weight:700;font-size:12pt;text-transform:uppercase}
+      .n{width:9mm;text-align:center;color:#555;font-size:9pt}
+      .name{font-weight:600;word-break:break-word}
+      .sys{width:34mm;text-align:right;font-weight:700;white-space:nowrap}
+      .real{width:45mm;height:11mm;text-align:right;vertical-align:bottom} .u{font-size:8pt;color:#666}
+      .foot{margin-top:10mm;display:flex;gap:12mm} .foot span{flex:1;border-top:1px solid #000;padding-top:1mm;text-align:center;font-size:9pt}
     </style></head><body>
-      <h1>Folha de Conferência de Estoque</h1>
-      <div style="font-size:9pt;color:#444">Gerada em ${now} · ${toPrint.length} itens${showQty ? "" : " · contagem cega"}</div>
+      <h1>Conferência de Estoque</h1>
       <div class="meta"><span>Responsável: </span><span style="flex:.5">Data: ___/___/______</span></div>
-      <table><thead><tr><th>#</th><th>OK</th><th>Produto</th>${showQty ? "<th>Sistema</th>" : ""}<th>Contado</th><th>Dif. (+/-)</th><th>Observação</th></tr></thead>
+      <table><thead><tr><th>#</th><th>Produto</th>${showQty ? '<th style="text-align:right">Sistema</th>' : ""}<th>Contado</th></tr></thead>
       <tbody>${body}</tbody></table>
-      <div class="foot"><span>Assinatura do conferente</span><span>Assinatura do responsável</span></div>
+      <div class="foot"><span>Assinatura do conferente</span></div>
       <script>window.addEventListener('load',()=>setTimeout(()=>window.print(),300));<\/script>
     </body></html>`)
     w.document.close()
@@ -155,15 +143,7 @@ export default function ConferenciaPage() {
       </div>
 
       <Card className="space-y-3 p-4">
-        <div className="grid gap-3 md:grid-cols-2">
-          <div><Label>Buscar produto</Label><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nome do produto" /></div>
-          <div><Label>Local</Label>
-            <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={locFilter} onChange={(e) => setLocFilter(e.target.value)}>
-              <option value="">Todos os locais</option>
-              {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-          </div>
-        </div>
+        <div><Label>Buscar produto</Label><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nome do produto" /></div>
         <div>
           <Label>Categorias {catFilter.size === 0 && <span className="text-muted-foreground">(todas)</span>}</Label>
           <div className="mt-1 flex flex-wrap gap-2">
@@ -195,7 +175,7 @@ export default function ConferenciaPage() {
                 <Checkbox className="mt-1" checked={selected.has(r.key)} onCheckedChange={() => toggleSet(selected, r.key, setSelected)} />
                 <div className="min-w-0 flex-1">
                   <div className="break-words font-medium">{r.name}</div>
-                  <div className="text-xs text-muted-foreground">{r.catName}{r.loc && ` · ${r.loc}`}</div>
+                  <div className="text-xs text-muted-foreground">{r.catName}</div>
                 </div>
                 <div className="whitespace-nowrap font-semibold tabular-nums">{formatQuantity(r.qty, r.unit)}</div>
               </label>
