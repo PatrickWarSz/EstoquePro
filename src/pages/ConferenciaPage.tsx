@@ -27,6 +27,20 @@ export function parseCount(raw: string): number | null {
 
 type Row = { key: string; catId: string; catName: string; itemId: string; name: string; qty: number; unit: string }
 
+type Group<T> = { catId: string; catName: string; rows: T[] }
+
+/** Agrupa mantendo a ordem de chegada, igual à folha impressa. */
+function groupByCategory<T extends { catId: string; catName: string }>(list: T[]): Group<T>[] {
+  const out: Group<T>[] = []
+  const idx = new Map<string, number>()
+  for (const it of list) {
+    let i = idx.get(it.catId)
+    if (i === undefined) { i = out.length; idx.set(it.catId, i); out.push({ catId: it.catId, catName: it.catName, rows: [] }) }
+    out[i].rows.push(it)
+  }
+  return out
+}
+
 export default function ConferenciaPage() {
   const { categories, applyBatchMovements } = useStockStore()
   const [catFilter, setCatFilter] = useState<Set<string>>(new Set())
@@ -58,6 +72,15 @@ export default function ConferenciaPage() {
   }, [rows, catFilter, search])
 
   const toPrint = filtered.filter((r) => selected.size === 0 || selected.has(r.key))
+
+  /** Numeração idêntica à da folha: 1, 2, 3... na ordem em que sai impressa. */
+  const printNumbers = useMemo(() => {
+    const m = new Map<string, number>()
+    toPrint.forEach((r, i) => m.set(r.key, i + 1))
+    return m
+  }, [toPrint])
+
+  const groups = useMemo(() => groupByCategory(filtered), [filtered])
 
   const toggleSet = (s: Set<string>, id: string, set: (v: Set<string>) => void) => {
     const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); set(n)
