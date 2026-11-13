@@ -22,6 +22,7 @@ const HistoricoPage = lazy(() => import("./pages/HistoricoPage"));
 const ConfiguracoesPage = lazy(() => import("./pages/ConfiguracoesPage"));
 const ScannerPage = lazy(() => import("./pages/ScannerPage"));
 const EtiquetasPage = lazy(() => import("./pages/EtiquetasPage"));
+const ConferenciaPage = lazy(() => import("./pages/ConferenciaPage"));
 const FuncionariosPage = lazy(() => import("./pages/FuncionariosPage"));
 const EmployeeHistoryPage = lazy(() => import("./pages/EmployeeHistoryPage"));
 const SomatoriosPage = lazy(() => import("./pages/SomatoriosPage"));
@@ -72,6 +73,7 @@ const App = () => {
                 <Route path="fornecedores" element={<RequireAuth module="fornecedores"><FornecedoresPage /></RequireAuth>} />
                 <Route path="historico" element={<RequireAuth module="historico"><HistoricoPage /></RequireAuth>} />
                 <Route path="scanner" element={<RequireAuth module="scanner"><ScannerPage /></RequireAuth>} />
+                <Route path="conferencia" element={<RequireAuth module="estoque"><ConferenciaPage /></RequireAuth>} />
                 <Route path="etiquetas" element={<RequireAuth module="etiquetas"><EtiquetasPage /></RequireAuth>} />
                 <Route path="somatorios" element={<RequireAuth module="somatorios"><SomatoriosPage /></RequireAuth>} />
                 <Route path="configuracoes" element={<RequireAuth module="configuracoes"><ConfiguracoesPage /></RequireAuth>} />
