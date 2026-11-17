@@ -192,19 +192,24 @@ export default function ConferenciaPage() {
               <Button onClick={printSheet}><Printer className="mr-2 h-4 w-4" />Imprimir / PDF</Button>
             </div>
           </Card>
-          <Card className="divide-y">
-            {filtered.map((r) => (
-              <label key={r.key} className="flex cursor-pointer items-start gap-3 p-3">
-                <Checkbox className="mt-1" checked={selected.has(r.key)} onCheckedChange={() => toggleSet(selected, r.key, setSelected)} />
-                <div className="min-w-0 flex-1">
-                  <div className="break-words font-medium">{r.name}</div>
-                  <div className="text-xs text-muted-foreground">{r.catName}</div>
+          <div className="space-y-4">
+            {groups.map((g) => (
+              <Card key={g.catId} className="overflow-hidden">
+                <div className="bg-muted px-3 py-2 text-sm font-bold uppercase tracking-wide">{g.catName} <span className="font-normal text-muted-foreground">({g.rows.length})</span></div>
+                <div className="divide-y">
+                  {g.rows.map((r) => (
+                    <label key={r.key} className="flex cursor-pointer items-center gap-3 p-3">
+                      <Checkbox checked={selected.has(r.key)} onCheckedChange={() => toggleSet(selected, r.key, setSelected)} />
+                      <span className="w-8 shrink-0 text-center text-xs text-muted-foreground tabular-nums">{printNumbers.get(r.key) ?? "—"}</span>
+                      <div className="min-w-0 flex-1 break-words font-medium">{r.name}</div>
+                      <div className="whitespace-nowrap font-semibold tabular-nums">{formatQuantity(r.qty, r.unit)}</div>
+                    </label>
+                  ))}
                 </div>
-                <div className="whitespace-nowrap font-semibold tabular-nums">{formatQuantity(r.qty, r.unit)}</div>
-              </label>
+              </Card>
             ))}
-            {filtered.length === 0 && <p className="p-6 text-center text-muted-foreground">Nenhum item encontrado</p>}
-          </Card>
+            {filtered.length === 0 && <Card><p className="p-6 text-center text-muted-foreground">Nenhum item encontrado</p></Card>}
+          </div>
         </TabsContent>
 
         <TabsContent value="lancar" className="space-y-3">
@@ -216,20 +221,29 @@ export default function ConferenciaPage() {
               <Button onClick={apply} disabled={saving || changed.length === 0}><Save className="mr-2 h-4 w-4" />Ajustar {changed.length} divergência(s)</Button>
             </div>
           </Card>
-          <Card className="divide-y">
-            {diffs.map(({ r, diff }) => (
-              <div key={r.key} className="flex flex-wrap items-center gap-3 p-3">
-                <div className="min-w-0 flex-1 basis-48">
-                  <div className="break-words font-medium">{r.name}</div>
-                  <div className="text-xs text-muted-foreground">{r.catName} · Sistema: {formatQuantity(r.qty, r.unit)}</div>
+          <div className="space-y-4">
+            {groupByCategory(diffs.map((d) => ({ ...d.r, diff: d.diff }))).map((g) => (
+              <Card key={g.catId} className="overflow-hidden">
+                <div className="bg-muted px-3 py-2 text-sm font-bold uppercase tracking-wide">{g.catName} <span className="font-normal text-muted-foreground">({g.rows.length})</span></div>
+                <div className="divide-y">
+                  {g.rows.map((r) => (
+                    <div key={r.key} className="flex flex-wrap items-center gap-3 p-3">
+                      <span className="w-8 shrink-0 text-center text-xs text-muted-foreground tabular-nums">{printNumbers.get(r.key) ?? "—"}</span>
+                      <div className="min-w-0 flex-1 basis-40">
+                        <div className="break-words font-medium">{r.name}</div>
+                        <div className="text-xs text-muted-foreground">Sistema: {formatQuantity(r.qty, r.unit)}</div>
+                      </div>
+                      <Input inputMode="decimal" className="w-28" placeholder="Contado" value={counts[r.key] ?? ""} onChange={(e) => setCounts({ ...counts, [r.key]: e.target.value })} />
+                      <div className={`w-28 text-right text-sm font-semibold tabular-nums ${r.diff === null ? "text-muted-foreground" : r.diff === 0 ? "text-primary" : "text-destructive"}`}>
+                        {r.diff === null ? "—" : r.diff === 0 ? "Bateu" : `${r.diff > 0 ? "+" : ""}${formatQuantity(r.diff, r.unit)}`}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <Input inputMode="decimal" className="w-28" placeholder="Contado" value={counts[r.key] ?? ""} onChange={(e) => setCounts({ ...counts, [r.key]: e.target.value })} />
-                <div className={`w-28 text-right text-sm font-semibold tabular-nums ${diff === null ? "text-muted-foreground" : diff === 0 ? "text-primary" : "text-destructive"}`}>
-                  {diff === null ? "—" : diff === 0 ? "Bateu" : `${diff > 0 ? "+" : ""}${formatQuantity(diff, r.unit)}`}
-                </div>
-              </div>
+              </Card>
             ))}
-          </Card>
+            {diffs.length === 0 && <Card><p className="p-6 text-center text-muted-foreground">Nenhum item encontrado</p></Card>}
+          </div>
         </TabsContent>
       </Tabs>
     </div>
