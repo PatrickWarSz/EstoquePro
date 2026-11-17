@@ -14,7 +14,17 @@ import {
   X,
   MessageCircle,
   Undo2,
+  MoreVertical,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Progress } from "@/components/ui/progress"
+import { formatQuantity, pluralizeUnit } from "@/lib/units"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -143,16 +153,53 @@ function deliveryBadge(status: Order["deliveryStatus"]) {
 
 // ─── main component ──────────────────────────────────────────────────────────
 
-type FilterStatus = "all" | "pending" | "late" | "done"
+type FilterStatus = "open" | "late" | "done" | "all"
+
+function daysBetween(fromYmd: string, toYmd: string) {
+  const a = new Date(fromYmd + "T00:00:00Z").getTime()
+  const b = new Date(toYmd + "T00:00:00Z").getTime()
+  return Math.round((b - a) / 86400000)
+}
+
+/** Um único selo por pedido, dizendo o que importa agora. */
+function statusChip(order: Order) {
+  const done = order.deliveryStatus !== "Entrega Incompleta"
+  const expected = order.expectedDate ? String(order.expectedDate).slice(0, 10) : ""
+  if (done) {
+    const late = getDeadlineStatus(order.expectedDate, order.deliveryDate) === "Entregue com Atraso"
+    return late
+      ? { label: "Recebido com atraso", tone: "muted" as const, icon: CheckCircle2 }
+      : { label: "Recebido", tone: "success" as const, icon: CheckCircle2 }
+  }
+  if (!expected) return { label: "Sem previsão", tone: "muted" as const, icon: Clock }
+  const diff = daysBetween(todayDateInputValue(), expected)
+  if (diff < 0) {
+    const d = Math.abs(diff)
+    return { label: `Atrasado ${d} ${d === 1 ? "dia" : "dias"}`, tone: "destructive" as const, icon: AlertTriangle }
+  }
+  if (diff === 0) return { label: "Chega hoje", tone: "warning" as const, icon: Truck }
+  if (diff === 1) return { label: "Chega amanhã", tone: "warning" as const, icon: Truck }
+  if (diff <= 7) return { label: `Chega em ${diff} dias`, tone: "warning" as const, icon: Truck }
+  return { label: `Chega em ${diff} dias`, tone: "primary" as const, icon: Clock }
+}
+
+const toneClass = {
+  destructive: "border-destructive/30 bg-destructive/10 text-destructive",
+  warning: "border-warning/30 bg-warning/10 text-warning",
+  success: "border-success/30 bg-success/10 text-success",
+  primary: "border-primary/30 bg-primary/10 text-primary",
+  muted: "border-border bg-muted text-muted-foreground",
+}
 
 export function OrdersPage() {
   const { suppliers, orders, categories, addOrder, updateOrder, removeOrder, registerDelivery, updateDelivery, finalizeOrder, revertOrder, fetchMoreOrders, ordersHasMore } =
     useStockStore() as StockState
 
   const [search, setSearch] = useState("")
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>("all")
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>("open")
   const [filterSupplier, setFilterSupplier] = useState("all")
   const [loadingMore, setLoadingMore] = useState(false)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
   const [createOpen, setCreateOpen] = useState(false)
   const [deliveryOpen, setDeliveryOpen] = useState<Order | null>(null)
@@ -163,472 +210,288 @@ export function OrdersPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<Order | null>(null)
   const [revertConfirm, setRevertConfirm] = useState<Order | null>(null)
 
-  // ── stats ──────────────────────────────────────────────────────────────────
-  const stats = useMemo(() => {
-    const total = orders.length
-    const late = orders.filter((o) => o.deliveryStatus === "Entrega Incompleta" && getDeadlineStatus(o.expectedDate, o.deliveryDate) === "Pedido Atrasado").length
-    const pending = orders.filter((o) => o.deliveryStatus === "Entrega Incompleta").length
-    const done = orders.filter((o) => o.deliveryStatus === "Entrega Completa" || o.deliveryStatus === "Entrega Excedente").length
-    return { total, late, pending, done }
-  }, [orders])
+  const isOpen = (o: Order) => o.deliveryStatus === "Entrega Incompleta"
+  const isLate = (o: Order) => isOpen(o) && getDeadlineStatus(o.expectedDate, o.deliveryDate) === "Pedido Atrasado"
 
-  // ── filtered list ─────────────────────────────────────────────────────────
+  const stats = useMemo(() => ({
+    total: orders.length,
+    open: orders.filter(isOpen).length,
+    late: orders.filter(isLate).length,
+    done: orders.filter((o) => !isOpen(o)).length,
+  }), [orders])
+
   const filtered = useMemo(() => {
-    return orders
-      .filter((o) => {
-        if (filterSupplier !== "all" && o.supplierId !== filterSupplier) return false
-        if (filterStatus === "pending" && o.deliveryStatus !== "Entrega Incompleta") return false
-        const deadlineStatus = getDeadlineStatus(o.expectedDate, o.deliveryDate)
-        if (filterStatus === "late" && (o.deliveryStatus !== "Entrega Incompleta" || deadlineStatus !== "Pedido Atrasado")) return false
-        if (filterStatus === "done" && o.deliveryStatus === "Entrega Incompleta") return false
-        if (search) {
-          const q = search.toLowerCase()
-          const sup = suppliers.find((s) => s.id === o.supplierId)?.name.toLowerCase() || ""
-          if (
-            !o.productDescription.toLowerCase().includes(q) &&
-            !sup.includes(q)
-          )
-            return false
-        }
-        return true
-      })
-      .sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime())
+    const q = search.trim().toLowerCase()
+    const list = orders.filter((o) => {
+      if (filterSupplier !== "all" && o.supplierId !== filterSupplier) return false
+      if (filterStatus === "open" && !isOpen(o)) return false
+      if (filterStatus === "late" && !isLate(o)) return false
+      if (filterStatus === "done" && isOpen(o)) return false
+      if (q) {
+        const sup = suppliers.find((s) => s.id === o.supplierId)?.name.toLowerCase() || ""
+        if (!o.productDescription.toLowerCase().includes(q) && !sup.includes(q)) return false
+      }
+      return true
+    })
+    // Abertos: atrasados primeiro, depois quem chega antes. Concluídos: mais recentes primeiro.
+    return list.sort((a, b) => {
+      const ao = isOpen(a), bo = isOpen(b)
+      if (ao !== bo) return ao ? -1 : 1
+      if (ao) {
+        const ea = a.expectedDate ? String(a.expectedDate).slice(0, 10) : "9999"
+        const eb = b.expectedDate ? String(b.expectedDate).slice(0, 10) : "9999"
+        return ea.localeCompare(eb)
+      }
+      return new Date(b.deliveryDate || b.orderDate).getTime() - new Date(a.deliveryDate || a.orderDate).getTime()
+    })
   }, [orders, filterStatus, filterSupplier, search, suppliers])
 
-  // ── grouping (only used when no single-status filter is active) ────────────
-  const groupedView = filterStatus === "all"
-  const incomingOrders = useMemo(
-    () =>
-      filtered
-        .filter((o) => o.deliveryStatus === "Entrega Incompleta")
-        .sort((a, b) => {
-          const aLate = getDeadlineStatus(a.expectedDate, a.deliveryDate) === "Pedido Atrasado"
-          const bLate = getDeadlineStatus(b.expectedDate, b.deliveryDate) === "Pedido Atrasado"
-          if (aLate !== bLate) return aLate ? -1 : 1
-          return new Date(a.expectedDate || 0).getTime() - new Date(b.expectedDate || 0).getTime()
-        }),
-    [filtered]
-  )
-  const completedOrders = useMemo(
-    () =>
-      filtered
-        .filter((o) => o.deliveryStatus !== "Entrega Incompleta")
-        .sort(
-          (a, b) =>
-            new Date(b.deliveryDate || b.orderDate).getTime() -
-            new Date(a.deliveryDate || a.orderDate).getTime()
-        ),
-    [filtered]
-  )
+  function sendWhatsApp(order: Order) {
+    const supplier = suppliers.find((s) => s.id === order.supplierId)
+    const linkedCat = categories.find((c) => c.id === order.linkedCategoryId)
+    const linkedItem = linkedCat?.items.find((i) => i.id === order.linkedItemId)
+    const linkedItemLabel = linkedItem ? `${linkedCat?.name} → ${linkedItem.name}` : undefined
+    openWhatsAppWeb(generateDeliveryMessage(order, supplier?.name || "Desconhecido", linkedItem?.unit, linkedItemLabel))
+  }
 
   function renderOrderCard(order: Order) {
     const supplier = suppliers.find((s) => s.id === order.supplierId)
     const quantityOrdered = order.quantityOrdered ?? 0
     const quantityDelivered = order.quantityDelivered ?? 0
     const pricePerUnit = order.pricePerUnit ?? 0
-    const orderUnit = order.unit ||
-      categories.find((c) => c.id === order.linkedCategoryId)
-        ?.items.find((i) => i.id === order.linkedItemId)?.unit ||
-      "kg"
-    const toDeliver = quantityOrdered - quantityDelivered
-    const deadlineStatus = getDeadlineStatus(order.expectedDate, order.deliveryDate)
-    const totalValue =
-      quantityDelivered * pricePerUnit ||
-      quantityOrdered * pricePerUnit
-    const linkedCat = categories.find(
-      (c) => c.id === order.linkedCategoryId
-    )
-    const linkedItem = linkedCat?.items.find(
-      (i) => i.id === order.linkedItemId
-    )
-
-    // Estado do pedido — eixo separado de "completude da entrega":
-    // - aberto: nenhuma entrega registrada ainda (editar dados do pedido em si)
-    // - em_andamento: já tem entrega(s) parcial(is), mas não foi finalizado
-    // - concluido: finalizado (Completa/Excedente) — só ações pós-fechamento
-    const orderLifecycle: "aberto" | "em_andamento" | "concluido" =
-      order.deliveryStatus !== "Entrega Incompleta"
-        ? "concluido"
-        : quantityDelivered > 0
-        ? "em_andamento"
-        : "aberto"
+    const linkedCat = categories.find((c) => c.id === order.linkedCategoryId)
+    const linkedItem = linkedCat?.items.find((i) => i.id === order.linkedItemId)
+    const orderUnit = order.unit || linkedItem?.unit || "kg"
+    const toDeliver = Math.max(0, quantityOrdered - quantityDelivered)
+    const totalValue = (quantityDelivered || quantityOrdered) * pricePerUnit
+    const pct = quantityOrdered > 0 ? Math.min(100, (quantityDelivered / quantityOrdered) * 100) : 0
+    const open = isOpen(order)
+    const hasDeliveries = quantityDelivered > 0
+    const chip = statusChip(order)
+    const ChipIcon = chip.icon
+    const showDetails = !!expanded[order.id]
 
     return (
       <Card
         key={order.id}
         className={cn(
-          "p-4 py-3 transition-colors",
-          deadlineStatus === "Pedido Atrasado" &&
-            order.deliveryStatus === "Entrega Incompleta" &&
-            "border-destructive/30 bg-destructive/[0.02]"
+          "overflow-hidden border-l-4 p-4",
+          chip.tone === "destructive" ? "border-l-destructive"
+            : chip.tone === "warning" ? "border-l-warning"
+            : chip.tone === "success" ? "border-l-success"
+            : chip.tone === "primary" ? "border-l-primary"
+            : "border-l-border"
         )}
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          {/* Left info */}
-          <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold text-sm truncate">
-                {order.productDescription}
-              </span>
-              {/* 1º Prazo · 2º Completude · 3º selo neutro de estoque (eixos separados, nesta ordem) */}
-              {deadlineBadge(deadlineStatus)}
-              {deliveryBadge(order.deliveryStatus)}
-              {order.stockEntryCreated && (
-                <Badge variant="outline" className="border-muted-foreground/30 bg-muted/50 text-muted-foreground text-xs gap-1">
-                  <PackageCheck className="h-3 w-3" />
-                  Entrada lançada
-                </Badge>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-              <span>
-                <strong>Fornecedor:</strong>{" "}
-                {supplier?.name || "—"}
-              </span>
-              <span>
-                <strong>Pedido:</strong> {fmtDate(order.orderDate)}
-              </span>
-              <span>
-                <strong>Prev.:</strong> {fmtDate(order.expectedDate)}
-              </span>
-              {order.deliveryDate && (
-                <span>
-                  <strong>Entrega:</strong>{" "}
-                  {fmtDate(order.deliveryDate)}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-              <span>
-                <strong>Pedido:</strong>{" "}
-                {quantityOrdered.toLocaleString("pt-BR")} {orderUnit}
-              </span>
-              <span>
-                <strong>Entregue:</strong>{" "}
-                {quantityDelivered.toLocaleString("pt-BR")} {orderUnit}
-              </span>
-              {toDeliver > 0 && (
-                <span className="text-warning font-medium">
-                  Falta: {toDeliver.toLocaleString("pt-BR")} {orderUnit}
-                </span>
-              )}
-              {order.stockEntryQuantity !== undefined &&
-                order.stockEntryQuantity > 0 && (
-                  <span>
-                    <strong>Entrada estoque:</strong>{" "}
-                    {order.stockEntryQuantity} {linkedItem?.unit || "un"}
-                  </span>
-                )}
-              <span>
-                <strong>Preço/{orderUnit}:</strong>{" "}
-                {pricePerUnit.toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 4,
-                })}
-              </span>
-              <span>
-                <strong>Total:</strong> {fmtCurrency(totalValue)}
-              </span>
-            </div>
-            {linkedItem && (
-              <p className="text-xs text-muted-foreground">
-                <strong>Item no estoque:</strong> {linkedCat?.name} →{" "}
-                {linkedItem.name}
-              </p>
-            )}
-            {order.notes && (
-              <p className="text-xs text-muted-foreground italic">
-                {order.notes}
-              </p>
-            )}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="break-words text-base font-semibold leading-snug">{order.productDescription}</p>
+            <p className="mt-0.5 text-sm text-muted-foreground break-words">
+              {supplier?.name || "Sem fornecedor"}
+              {open
+                ? <> · previsão {fmtDate(order.expectedDate)}</>
+                : order.deliveryDate ? <> · recebido em {fmtDate(order.deliveryDate)}</> : null}
+            </p>
           </div>
-
-          {/* Actions — variam por estado do pedido (Aberto / Em andamento / Concluído).
-              Cada estado mostra só as ações que fazem sentido nele, evitando o
-              "Editar o quê, quando?" de antes. */}
-          <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-            {orderLifecycle === "concluido" ? (
-              <>
-                {order.stockEntryCreated && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5 text-xs border-green-600/40 text-green-600 hover:bg-green-500/10"
-                    onClick={() => {
-                      const supplier = suppliers.find((s) => s.id === order.supplierId)
-                      const linkedCat = categories.find((c) => c.id === order.linkedCategoryId)
-                      const linkedItem = linkedCat?.items.find((i) => i.id === order.linkedItemId)
-                      const linkedItemLabel = linkedItem
-                        ? `${linkedCat?.name} → ${linkedItem.name}`
-                        : undefined
-                      const message = generateDeliveryMessage(
-                        order,
-                        supplier?.name || "Desconhecido",
-                        linkedItem?.unit,
-                        linkedItemLabel
-                      )
-                      openWhatsAppWeb(message)
-                    }}
-                  >
-                    <MessageCircle className="h-3.5 w-3.5" />
-                    WhatsApp
-                  </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            <Badge variant="outline" className={cn("gap-1 whitespace-nowrap", toneClass[chip.tone])}>
+              <ChipIcon className="h-3 w-3" />
+              {chip.label}
+            </Badge>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Mais ações">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {open && !hasDeliveries && (
+                  <DropdownMenuItem onClick={() => setEditOpen(order)}>
+                    <Pencil className="mr-2 h-4 w-4" /> Editar pedido
+                  </DropdownMenuItem>
+                )}
+                {open && hasDeliveries && (
+                  <>
+                    <DropdownMenuItem onClick={() => setEditDeliveryOpen(order)}>
+                      <Pencil className="mr-2 h-4 w-4" /> Corrigir recebimento
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { finalizeOrder(order.id); toast.success("Pedido encerrado") }}>
+                      <CheckCircle2 className="mr-2 h-4 w-4" /> Encerrar (não vem mais nada)
+                    </DropdownMenuItem>
+                  </>
                 )}
                 {order.deliveries && order.deliveries.length > 0 && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5 text-xs border-purple-500/40 text-purple-600 hover:bg-purple-500/10"
-                    onClick={() => setDeliveryHistoryOpen(order)}
-                  >
-                    <Clock className="h-3.5 w-3.5" />
-                    Histórico
-                  </Button>
+                  <DropdownMenuItem onClick={() => setDeliveryHistoryOpen(order)}>
+                    <Clock className="mr-2 h-4 w-4" /> Ver recebimentos
+                  </DropdownMenuItem>
                 )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 gap-1.5 text-xs border-muted-foreground/30 text-muted-foreground hover:bg-muted"
-                  onClick={() => setRevertConfirm(order)}
-                >
-                  <Undo2 className="h-3.5 w-3.5" />
-                  Reverter
-                </Button>
-              </>
-            ) : orderLifecycle === "em_andamento" ? (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 gap-1.5 text-xs border-success/40 text-success hover:bg-success/10"
-                  onClick={() => setDeliveryOpen(order)}
-                >
-                  <Truck className="h-3.5 w-3.5" />
-                  Registrar Entrega
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 gap-1.5 text-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
-                  onClick={() => setEditDeliveryOpen(order)}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Editar Entrega
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 gap-1.5 text-xs border-blue-500/40 text-blue-600 hover:bg-blue-500/10"
-                  onClick={() => {
-                    finalizeOrder(order.id)
-                    toast.success("Pedido finalizado")
-                  }}
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Finalizar Pedido
-                </Button>
-                {order.deliveries && order.deliveries.length > 0 && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5 text-xs border-purple-500/40 text-purple-600 hover:bg-purple-500/10"
-                    onClick={() => setDeliveryHistoryOpen(order)}
-                  >
-                    <Clock className="h-3.5 w-3.5" />
-                    Histórico
-                  </Button>
+                {!open && order.stockEntryCreated && (
+                  <DropdownMenuItem onClick={() => sendWhatsApp(order)}>
+                    <MessageCircle className="mr-2 h-4 w-4" /> Enviar no WhatsApp
+                  </DropdownMenuItem>
                 )}
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  onClick={() => setDeleteConfirm(order)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </>
-            ) : (
-              <>
-                {/* Aberto: nenhuma entrega registrada ainda */}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 gap-1.5 text-xs border-success/40 text-success hover:bg-success/10"
-                  onClick={() => setDeliveryOpen(order)}
-                >
-                  <Truck className="h-3.5 w-3.5" />
-                  Registrar Entrega
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 gap-1.5 text-xs"
-                  onClick={() => setEditOpen(order)}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Editar Pedido
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  onClick={() => setDeleteConfirm(order)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </>
-            )}
+                {!open && (
+                  <DropdownMenuItem onClick={() => setRevertConfirm(order)}>
+                    <Undo2 className="mr-2 h-4 w-4" /> Reabrir pedido
+                  </DropdownMenuItem>
+                )}
+                {open && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteConfirm(order)}>
+                      <Trash2 className="mr-2 h-4 w-4" /> Excluir pedido
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
+
+        {/* Progresso: chegou / pedido */}
+        <div className="mt-3 space-y-1.5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+            <span>
+              <span className="font-semibold tabular-nums">{quantityDelivered.toLocaleString("pt-BR")}</span>
+              <span className="text-muted-foreground"> de {formatQuantity(quantityOrdered, orderUnit)} recebidos</span>
+            </span>
+            {open && toDeliver > 0 && (
+              <span className="font-medium text-warning">Faltam {formatQuantity(toDeliver, orderUnit)}</span>
+            )}
+          </div>
+          <Progress value={pct} className="h-2" />
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {open ? (
+            <Button className="gap-2" onClick={() => setDeliveryOpen(order)}>
+              <Truck className="h-4 w-4" />
+              {hasDeliveries ? "Receber o restante" : "Receber"}
+            </Button>
+          ) : order.stockEntryCreated ? (
+            <Button variant="outline" className="gap-2" onClick={() => sendWhatsApp(order)}>
+              <MessageCircle className="h-4 w-4" /> WhatsApp
+            </Button>
+          ) : null}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto gap-1 text-muted-foreground"
+            onClick={() => setExpanded((s) => ({ ...s, [order.id]: !s[order.id] }))}
+          >
+            {showDetails ? "Menos detalhes" : "Detalhes"}
+            <ChevronDown className={cn("h-4 w-4 transition-transform", showDetails && "rotate-180")} />
+          </Button>
+        </div>
+
+        {showDetails && (
+          <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1.5 border-t pt-3 text-sm sm:grid-cols-2">
+            <div className="flex justify-between gap-2"><dt className="text-muted-foreground">Data do pedido</dt><dd>{fmtDate(order.orderDate)}</dd></div>
+            <div className="flex justify-between gap-2"><dt className="text-muted-foreground">Previsão</dt><dd>{fmtDate(order.expectedDate)}</dd></div>
+            <div className="flex justify-between gap-2"><dt className="text-muted-foreground">Preço por {pluralizeUnit(1, orderUnit)}</dt><dd className="tabular-nums">{fmtCurrency(pricePerUnit)}</dd></div>
+            <div className="flex justify-between gap-2"><dt className="text-muted-foreground">Valor total</dt><dd className="font-medium tabular-nums">{fmtCurrency(totalValue)}</dd></div>
+            {linkedItem && (
+              <div className="flex justify-between gap-2 sm:col-span-2"><dt className="text-muted-foreground">Item no estoque</dt><dd className="text-right break-words">{linkedCat?.name} → {linkedItem.name}</dd></div>
+            )}
+            {order.stockEntryCreated && (
+              <div className="flex justify-between gap-2 sm:col-span-2"><dt className="text-muted-foreground">Entrada no estoque</dt><dd className="flex items-center gap-1 text-success"><PackageCheck className="h-4 w-4" />{order.stockEntryQuantity ? formatQuantity(order.stockEntryQuantity, linkedItem?.unit) : "lançada"}</dd></div>
+            )}
+            {order.notes && (
+              <div className="sm:col-span-2"><dt className="text-muted-foreground">Observações</dt><dd className="italic break-words">{order.notes}</dd></div>
+            )}
+          </dl>
+        )}
       </Card>
     )
   }
 
+  const tabs: { id: FilterStatus; label: string; count: number; tone: string }[] = [
+    { id: "open", label: "A receber", count: stats.open, tone: "text-warning" },
+    { id: "late", label: "Atrasados", count: stats.late, tone: "text-destructive" },
+    { id: "done", label: "Recebidos", count: stats.done, tone: "text-success" },
+    { id: "all", label: "Todos", count: stats.total, tone: "text-foreground" },
+  ]
+
+  const emptyText =
+    filterStatus === "late" ? "Nenhum pedido atrasado"
+      : filterStatus === "open" ? "Nada para receber no momento"
+      : "Nenhum pedido encontrado"
+
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-4xl space-y-5">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Pedidos de Matéria Prima</h2>
-          <p className="text-sm text-muted-foreground">
-            Acompanhe pedidos por fornecedor e registre entregas
-          </p>
+          <h2 className="text-2xl font-bold tracking-tight">Pedidos</h2>
+          <p className="text-sm text-muted-foreground">O que foi comprado e o que falta chegar</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setGeneralHistoryOpen(true)}
-            className="gap-2"
-          >
+          <Button variant="outline" onClick={() => setGeneralHistoryOpen(true)} className="gap-2">
             <Clock className="h-4 w-4" />
-            Histórico Geral
+            <span className="hidden sm:inline">Histórico</span>
           </Button>
-          <Button onClick={() => setCreateOpen(true)} className="gap-2 shrink-0">
+          <Button onClick={() => setCreateOpen(true)} className="gap-2">
             <Plus className="h-4 w-4" />
-            Novo Pedido
+            Novo pedido
           </Button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          { label: "Total", value: stats.total, icon: PackageCheck, color: "text-foreground" },
-          { label: "Pendentes", value: stats.pending, icon: Clock, color: "text-warning" },
-          { label: "Atrasados", value: stats.late, icon: AlertTriangle, color: "text-destructive" },
-          { label: "Concluídos", value: stats.done, icon: CheckCircle2, color: "text-success" },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <Card key={label} className="p-4 py-3 flex items-center gap-3">
-            <Icon className={cn("h-5 w-5 shrink-0", color)} />
-            <div>
-              <p className="text-xs text-muted-foreground">{label}</p>
-              <p className={cn("text-xl font-bold", color)}>{value}</p>
-            </div>
-          </Card>
+      {/* Abas com contagem */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setFilterStatus(t.id)}
+            className={cn(
+              "rounded-lg border p-3 text-left transition-colors",
+              filterStatus === t.id ? "border-primary bg-primary/5 ring-1 ring-primary" : "bg-card hover:bg-muted/50"
+            )}
+          >
+            <p className="text-xs font-medium text-muted-foreground">{t.label}</p>
+            <p className={cn("text-2xl font-bold tabular-nums", t.count > 0 ? t.tone : "text-muted-foreground")}>{t.count}</p>
+          </button>
         ))}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="relative flex-1 max-w-xs">
+      {/* Busca e fornecedor */}
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar produto ou fornecedor..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+          <Input placeholder="Buscar produto ou fornecedor" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          {search && (
+            <button type="button" aria-label="Limpar busca" className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground" onClick={() => setSearch("")}>
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
         <Select value={filterSupplier} onValueChange={setFilterSupplier}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="Fornecedor" />
-          </SelectTrigger>
+          <SelectTrigger className="w-full sm:w-56"><SelectValue placeholder="Fornecedor" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os fornecedores</SelectItem>
-            {suppliers.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.name}
-              </SelectItem>
-            ))}
+            {suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
           </SelectContent>
         </Select>
-        <div className="flex gap-1 rounded-lg border bg-muted/50 p-0.5">
-          {(
-            [
-              { id: "all", label: "Todos" },
-              { id: "pending", label: "Pendentes" },
-              { id: "late", label: "Atrasados" },
-              { id: "done", label: "Concluídos" },
-            ] as { id: FilterStatus; label: string }[]
-          ).map(({ id, label }) => (
-            <Button
-              key={id}
-              size="sm"
-              variant={filterStatus === id ? "default" : "ghost"}
-              className="h-7 px-3 text-xs"
-              onClick={() => setFilterStatus(id)}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
       </div>
 
-      {/* Orders list */}
       {filtered.length === 0 ? (
-        <Card className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
+        <Card className="flex h-40 flex-col items-center justify-center gap-2 text-muted-foreground">
           <PackageCheck className="h-10 w-10 opacity-30" />
-          <p className="text-sm">Nenhum pedido encontrado</p>
+          <p className="text-sm">{emptyText}</p>
         </Card>
-      ) : groupedView ? (
-        <div className="space-y-6">
-          {incomingOrders.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Truck className="h-4 w-4 text-warning" />
-                <h3 className="text-sm font-semibold">A caminho</h3>
-                <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning text-xs">
-                  {incomingOrders.length}
-                </Badge>
-              </div>
-              <div className="space-y-3">
-                {incomingOrders.map((order) => renderOrderCard(order))}
-              </div>
-            </div>
-          )}
-          {completedOrders.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-success" />
-                <h3 className="text-sm font-semibold">Concluídos</h3>
-                <Badge variant="outline" className="border-success/30 bg-success/10 text-success text-xs">
-                  {completedOrders.length}
-                </Badge>
-              </div>
-              <div className="space-y-3">
-                {completedOrders.map((order) => renderOrderCard(order))}
-              </div>
-            </div>
-          )}
-        </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map((order) => renderOrderCard(order))}
-        </div>
+        <div className="space-y-3">{filtered.map((order) => renderOrderCard(order))}</div>
       )}
       {ordersHasMore && filtered.length > 0 && (
-        <div className="mt-6 flex justify-center">
+        <div className="flex justify-center">
           <Button
-            onClick={async () => {
-              setLoadingMore(true)
-              await fetchMoreOrders(50, true)
-              setLoadingMore(false)
-            }}
+            onClick={async () => { setLoadingMore(true); await fetchMoreOrders(50, true); setLoadingMore(false) }}
             variant="outline"
             disabled={loadingMore}
             className="gap-2"
           >
-            {loadingMore ? "⏳ Carregando mais..." : <><ChevronDown className="h-4 w-4" />Carregar mais pedidos</>}
+            {loadingMore ? "Carregando..." : <><ChevronDown className="h-4 w-4" />Carregar mais pedidos</>}
           </Button>
         </div>
       )}
@@ -722,7 +585,7 @@ export function OrdersPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reverter pedido para "Em andamento"?</AlertDialogTitle>
+            <AlertDialogTitle>Reabrir este pedido?</AlertDialogTitle>
             <AlertDialogDescription>
               O pedido "{revertConfirm?.productDescription}" voltará a aparecer
               como em andamento, liberando os botões de Registrar Entrega,
@@ -742,7 +605,7 @@ export function OrdersPage() {
                 }
               }}
             >
-              Reverter
+              Reabrir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
