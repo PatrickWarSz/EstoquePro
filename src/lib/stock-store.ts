@@ -93,6 +93,7 @@ export interface StockState {
   updateSupplier: (id: string, up: any) => Promise<void>;
   removeSupplier: (id: string) => Promise<void>;
   addOrder: (o: any) => Promise<void>;
+  addOrders: (list: any[]) => Promise<void>;
   updateOrder: (id: string, up: any) => Promise<void>;
   removeOrder: (id: string) => Promise<void>;
   registerDelivery: (p: any) => Promise<void>;
@@ -630,6 +631,69 @@ await supabase.from('categorias').insert([{ nome: cat.name, workspace_id: wId, p
           await enqueueOp({ type: 'order.add', payload, workspaceId: wId!, createsTempId: tmpId, refFields: ['fornecedor_id', 'produto_id', 'categoria_id'] });
           toast.info('Sem conexão — pedido será criado quando voltar online');
         }
+      },
+
+      addOrders: async (list) => {
+        if (!list || list.length === 0) return;
+        const wId = useAuthStore.getState().workspaceId;
+        const toPayload = (o: any) => ({
+          workspace_id: wId,
+          fornecedor_id: o.supplierId,
+          produto_id: o.linkedItemId ?? null,
+          categoria_id: o.linkedCategoryId ?? null,
+          unidade: o.unit,
+          preco_por_unidade: o.pricePerUnit || 0,
+          quantidade_pedida: o.quantityOrdered,
+          data_esperada: o.expectedDate ?? null,
+          status_prazo: o.deadlineStatus,
+          status_entrega: o.deliveryStatus,
+          observacoes: o.notes ?? null,
+          descricao: o.productDescription,
+          criado_em: o.orderDate,
+        });
+
+        const enqueueAll = async () => {
+          for (const o of list) {
+            const tmpId = genTempId('order');
+            const local: Order = {
+              id: tmpId,
+              supplierId: o.supplierId,
+              linkedCategoryId: o.linkedCategoryId,
+              linkedItemId: o.linkedItemId,
+              unit: o.unit,
+              quantityOrdered: Number(o.quantityOrdered) || 0,
+              quantityDelivered: 0,
+              expectedDate: o.expectedDate,
+              deliveryDate: undefined,
+              deadlineStatus: o.deadlineStatus,
+              deliveryStatus: o.deliveryStatus,
+              notes: o.notes,
+              stockEntryCreated: false,
+              stockEntryQuantity: 0,
+              deliveries: [],
+              productDescription: o.productDescription || 'Pedido sem descrição',
+              orderDate: o.orderDate || new Date().toISOString(),
+              quantityReturned: 0,
+              pricePerUnit: Number(o.pricePerUnit) || 0,
+            } as any;
+            set((state) => ({ orders: [local, ...state.orders] }) as any);
+            await enqueueOp({ type: 'order.add', payload: toPayload(o), workspaceId: wId!, createsTempId: tmpId, refFields: ['fornecedor_id', 'produto_id', 'categoria_id'] });
+          }
+        };
+
+        if (isOffline()) { await enqueueAll(); return; }
+
+        const { supabase } = await import('./supabase');
+        let inserted = false;
+        try {
+          const { error } = await supabase.from('pedidos').insert(list.map(toPayload));
+          if (error) throw error;
+          inserted = true;
+        } catch {
+          await enqueueAll();
+          toast.info('Sem conexão — pedidos serão criados quando voltar online');
+        }
+        if (inserted) await get().initialize();
       },
 
        updateOrder: async (id, up) => {
